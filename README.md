@@ -106,6 +106,7 @@ The bridge forwards official tool schemas, responses, pagination and images. It 
 | Invalid MCP URL | Copy the full official URL; use exactly one non-empty `userToken`. |
 | Documentation works, design calls fail | Connect MCP inside the intended file and wake its browser tab. |
 | Wrong file/page | Verify the active MCP tab and focused page before requesting a change. |
+| Resource limit exceeded | Reduce the export size or request fewer results, then reload the host's MCP connection. |
 | Web/mobile cannot start the bridge | Use a desktop host able to run local stdio MCP processes. |
 
 Do not paste your URL, key or credential file into chat, issues, screenshots or source control. See [credential handling](SECURITY.md).
@@ -121,6 +122,8 @@ npm run package
 ```
 
 SDK and esbuild versions are pinned in `package-lock.json`. The build generates `plugin/server/bridge.mjs`, metadata and licenses for dependencies actually bundled. Tests use Node's built-in runner and synthetic credentials without contacting Penpot. They cover initialization, GET/POST redirect refusal, schemas/pagination/images, session/protocol headers, safe errors and process shutdown.
+
+The bridge caps each HTTP JSON/error body, SSE event and unread output backlog at 64 MiB. A single network chunk is also capped at 64 MiB. Exceeding a limit closes the bridge with a safe diagnostic; results are never silently truncated. SSE connections can remain open indefinitely and carry more than 64 MiB over their lifetime. This is a wire/buffer budget, not a limit on total process memory.
 
 The setup script and bridge share the same URL validator. On Windows, tests run setup in a temporary user profile, round-trip DPAPI, and verify rejected input preserves the existing configuration. Settings errors distinguish missing, unreadable, damaged and undecryptable credentials without printing their contents.
 

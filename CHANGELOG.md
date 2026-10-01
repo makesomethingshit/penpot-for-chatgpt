@@ -17,3 +17,4 @@ Development changes are unnumbered. The first release will be `0.1.0` at deploym
 - Report safe configuration errors and avoid inherited PowerShell module-path conflicts during DPAPI decryption.
 - Verify Windows setup, encrypted credential round-trip and preservation on invalid input.
 - Extend the existing design-system skill with scoped code-to-system creation, source mappings and executable catalog/token examples; retain five skills.
+- Bound remote JSON/error bodies, SSE events and output backlog; terminate on overflow without exposing credentials. Add malicious-stream, stalled-output and large-image regressions.

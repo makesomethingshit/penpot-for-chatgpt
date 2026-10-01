@@ -32,6 +32,7 @@ Specialists follow `penpot-use`. Inspection/audit stays read-only; edits preserv
 - No tools: check Node.js 22+, your desktop host's PATH and local configuration.
 - Authentication failure: check the configured URL/key in Penpot Integrations.
 - Documentation succeeds but design calls fail: wake the tab and connect MCP in the intended file.
+- Resource limit exceeded: JSON/error bodies, SSE events, individual network chunks and unread output are capped at 64 MiB. Reduce the export or results, then reload the host connection. Persistent SSE has no lifetime byte limit.
 
 See the [source repository](https://github.com/makesomethingshit/penpot-for-chatgpt) for installation updates and development instructions. Repository access is required while it remains private; the project's source license is undecided.
 
