@@ -10004,10 +10004,16 @@ if (url2) try {
     fetch: boundedFetch
   });
   local = new StdioServerTransport();
-  output = createWriteStream(null, { fd: 1, autoClose: false });
-  diagnostics = createWriteStream(null, { fd: 2, autoClose: false });
-  output.once("error", () => stop());
-  diagnostics.once("error", () => stop());
+  output = process.platform === "win32" ? createWriteStream(null, { fd: 1, autoClose: false }) : process.stdout;
+  diagnostics = process.platform === "win32" ? createWriteStream(null, { fd: 2, autoClose: false }) : process.stderr;
+  output.once("error", () => {
+    process.exitCode = 1;
+    stop();
+  });
+  diagnostics.once("error", () => {
+    process.exitCode = 1;
+    stop();
+  });
   remote.onmessage = (message) => {
     if (message.result?.protocolVersion) remote.setProtocolVersion(message.result.protocolVersion);
     writeOutput(output, serializeMessage(message));

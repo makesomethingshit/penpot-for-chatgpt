@@ -59,7 +59,7 @@ function launch(t, mode) {
   t.after(() => child.kill());
   let stderr = '';
   if (mode !== 'slow-error-output') child.stderr.on('data', data => { stderr += data; });
-  const closed = once(child, 'exit');
+  const closed = once(child, 'close');
   child.stdin.write(JSON.stringify(mode === 'get-sse' ?
     { jsonrpc: '2.0', method: 'notifications/initialized' } :
     { jsonrpc: '2.0', id: 1, method: 'tools/call', params: {} }) + '\n');
