@@ -137,12 +137,59 @@ var require_content_type = __commonJS({
   }
 });
 
-// plugin/server/bridge-source.mjs
+// plugin/server/connection.mjs
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+function validateConnectionURL(value) {
+  let url3;
+  try {
+    url3 = new URL(value.trim());
+  } catch {
+  }
+  const tokens = url3?.searchParams.getAll("userToken") ?? [];
+  if (!url3 || url3.protocol !== "https:" || url3.hostname !== "design.penpot.app" || url3.port || url3.pathname !== "/mcp/stream" || url3.username || url3.password || url3.hash || tokens.length !== 1 || !tokens[0].trim()) {
+    throw new Error("Invalid Penpot MCP URL. Copy the official server URL with exactly one non-empty userToken.");
+  }
+  return url3;
+}
+async function connectionURL(configurationPath = join(homedir(), ".penpot-for-chatgpt", "connection.json")) {
+  if (process.env.PENPOT_MCP_URL !== void 0) return validateConnectionURL(process.env.PENPOT_MCP_URL);
+  let text;
+  try {
+    text = await readFile(configurationPath, "utf8");
+  } catch (error2) {
+    throw new Error(error2.code === "ENOENT" ? "Penpot connection is missing. Run penpot-setup.ps1 on Windows, or set PENPOT_MCP_URL in the host environment." : "Cannot read the Penpot connection file. Check its access permissions.");
+  }
+  let config2;
+  try {
+    config2 = JSON.parse(text);
+  } catch {
+    throw new Error("Penpot connection file is damaged. Run penpot-setup.ps1 again.");
+  }
+  if (typeof config2?.dpapi !== "string" || !config2.dpapi) {
+    throw new Error("Penpot connection file is damaged. Run penpot-setup.ps1 again.");
+  }
+  if (process.platform !== "win32") {
+    throw new Error("Windows encrypted credentials cannot be used here. Set PENPOT_MCP_URL in the host environment.");
+  }
+  const script = '$ErrorActionPreference = "Stop"; $c = Get-Content -LiteralPath $env:PENPOT_CONNECTION_FILE -Raw | ConvertFrom-Json; $s = ConvertTo-SecureString $c.dpapi; [System.Net.NetworkCredential]::new("", $s).Password';
+  let stdout;
+  try {
+    const env = { ...process.env, PENPOT_CONNECTION_FILE: configurationPath };
+    delete env.PSModulePath;
+    ({ stdout } = await promisify(execFile)("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
+      env,
+      windowsHide: true,
+      timeout: 1e4
+    }));
+  } catch {
+    throw new Error("Cannot decrypt the Penpot connection. Run penpot-setup.ps1 as the current Windows user.");
+  }
+  return validateConnectionURL(stdout);
+}
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/shared/mediaType.js
 var import_content_type = __toESM(require_content_type(), 1);
@@ -177,14 +224,14 @@ function createFetchWithInit(baseFetch = fetch, baseInit) {
   if (!baseInit) {
     return baseFetch;
   }
-  return async (url2, init) => {
+  return async (url3, init) => {
     const mergedInit = {
       ...baseInit,
       ...init,
       // Headers need special handling - merge instead of replace
       headers: init?.headers ? { ...normalizeHeaders(baseInit.headers), ...normalizeHeaders(init.headers) } : baseInit.headers
     };
-    return baseFetch(url2, mergedInit);
+    return baseFetch(url3, mergedInit);
   };
 }
 
@@ -2063,21 +2110,21 @@ var asciiTabOrNewline = /[\t\n\r]/g;
 function stripTabAndNewline(value) {
   return value.replace(asciiTabOrNewline, "");
 }
-function urlHostnameOk(url2, hostname) {
+function urlHostnameOk(url3, hostname) {
   hostname.lastIndex = 0;
-  return hostname.test(url2.hostname);
+  return hostname.test(url3.hostname);
 }
-function urlProtocolOk(url2, protocol) {
+function urlProtocolOk(url3, protocol) {
   protocol.lastIndex = 0;
-  return protocol.test(url2.protocol.endsWith(":") ? url2.protocol.slice(0, -1) : url2.protocol);
+  return protocol.test(url3.protocol.endsWith(":") ? url3.protocol.slice(0, -1) : url3.protocol);
 }
 var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
   $ZodStringFormat.init(inst, def);
   inst._zod.check = (payload) => {
     try {
       const trimmed = payload.value.trim();
-      const url2 = validateURL(trimmed, def);
-      if (url2 === URL_BAD_FORMAT) {
+      const url3 = validateURL(trimmed, def);
+      if (url3 === URL_BAD_FORMAT) {
         payload.issues.push({
           code: "invalid_format",
           format: "url",
@@ -2088,7 +2135,7 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
         });
         return;
       }
-      if (url2 === URL_UNPARSEABLE) {
+      if (url3 === URL_UNPARSEABLE) {
         payload.issues.push({
           code: "invalid_format",
           format: "url",
@@ -2098,11 +2145,11 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
         });
         return;
       }
-      if (url2 === true) {
+      if (url3 === true) {
         payload.value = stripTabAndNewline(trimmed);
         return;
       }
-      if (def.hostname && !urlHostnameOk(url2, def.hostname)) {
+      if (def.hostname && !urlHostnameOk(url3, def.hostname)) {
         payload.issues.push({
           code: "invalid_format",
           format: "url",
@@ -2113,7 +2160,7 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
           continue: !def.abort
         });
       }
-      if (def.protocol && !urlProtocolOk(url2, def.protocol)) {
+      if (def.protocol && !urlProtocolOk(url3, def.protocol)) {
         payload.issues.push({
           code: "invalid_format",
           format: "url",
@@ -2124,7 +2171,7 @@ var $ZodURL = /* @__PURE__ */ $constructor("$ZodURL", (inst, def) => {
           continue: !def.abort
         });
       }
-      payload.value = def.normalize ? url2.href : stripTabAndNewline(trimmed);
+      payload.value = def.normalize ? url3.href : stripTabAndNewline(trimmed);
       return;
     } catch (_) {
       payload.issues.push({
@@ -8310,8 +8357,8 @@ var SafeUrlSchema = url().superRefine((val, ctx) => {
     });
     return NEVER;
   }
-}).refine((url2) => {
-  const u = new URL(url2);
+}).refine((url3) => {
+  const u = new URL(url3);
   return u.protocol !== "javascript:" && u.protocol !== "data:" && u.protocol !== "vbscript:";
 }, { message: "URL cannot use javascript:, data:, or vbscript: scheme" });
 var OAuthProtectedResourceMetadataSchema = looseObject({
@@ -8455,8 +8502,8 @@ var OAuthTokenRevocationRequestSchema = object({
 }).strip();
 
 // node_modules/@modelcontextprotocol/sdk/dist/esm/shared/auth-utils.js
-function resourceUrlFromServerUrl(url2) {
-  const resourceURL = typeof url2 === "string" ? new URL(url2) : new URL(url2.href);
+function resourceUrlFromServerUrl(url3) {
+  const resourceURL = typeof url3 === "string" ? new URL(url3) : new URL(url3.href);
   resourceURL.hash = "";
   return resourceURL;
 }
@@ -8815,8 +8862,8 @@ function isHttpsUrl(value) {
   if (!value)
     return false;
   try {
-    const url2 = new URL(value);
-    return url2.protocol === "https:" && url2.pathname !== "/";
+    const url3 = new URL(value);
+    return url3.protocol === "https:" && url3.pathname !== "/";
   } catch {
     return false;
   }
@@ -8886,13 +8933,13 @@ async function discoverOAuthProtectedResourceMetadata(serverUrl, opts, fetchFn =
   }
   return OAuthProtectedResourceMetadataSchema.parse(await response.json());
 }
-async function fetchWithCorsRetry(url2, headers, fetchFn = fetch) {
+async function fetchWithCorsRetry(url3, headers, fetchFn = fetch) {
   try {
-    return await fetchFn(url2, { headers });
+    return await fetchFn(url3, { headers });
   } catch (error2) {
     if (error2 instanceof TypeError) {
       if (headers) {
-        return fetchWithCorsRetry(url2, void 0, fetchFn);
+        return fetchWithCorsRetry(url3, void 0, fetchFn);
       } else {
         return void 0;
       }
@@ -8906,11 +8953,11 @@ function buildWellKnownPath(wellKnownPrefix, pathname = "", options = {}) {
   }
   return options.prependPathname ? `${pathname}/.well-known/${wellKnownPrefix}` : `/.well-known/${wellKnownPrefix}${pathname}`;
 }
-async function tryMetadataDiscovery(url2, protocolVersion, fetchFn = fetch) {
+async function tryMetadataDiscovery(url3, protocolVersion, fetchFn = fetch) {
   const headers = {
     "MCP-Protocol-Version": protocolVersion
   };
-  return await fetchWithCorsRetry(url2, headers, fetchFn);
+  return await fetchWithCorsRetry(url3, headers, fetchFn);
 }
 function shouldAttemptFallback(response, pathname) {
   return !response || response.status >= 400 && response.status < 500 && pathname !== "/";
@@ -8918,15 +8965,15 @@ function shouldAttemptFallback(response, pathname) {
 async function discoverMetadataWithFallback(serverUrl, wellKnownType, fetchFn, opts) {
   const issuer = new URL(serverUrl);
   const protocolVersion = opts?.protocolVersion ?? LATEST_PROTOCOL_VERSION;
-  let url2;
+  let url3;
   if (opts?.metadataUrl) {
-    url2 = new URL(opts.metadataUrl);
+    url3 = new URL(opts.metadataUrl);
   } else {
     const wellKnownPath = buildWellKnownPath(wellKnownType, issuer.pathname);
-    url2 = new URL(wellKnownPath, opts?.metadataServerUrl ?? issuer);
-    url2.search = issuer.search;
+    url3 = new URL(wellKnownPath, opts?.metadataServerUrl ?? issuer);
+    url3.search = issuer.search;
   }
-  let response = await tryMetadataDiscovery(url2, protocolVersion, fetchFn);
+  let response = await tryMetadataDiscovery(url3, protocolVersion, fetchFn);
   if (!opts?.metadataUrl && shouldAttemptFallback(response, issuer.pathname)) {
     const rootUrl = new URL(`/.well-known/${wellKnownType}`, issuer);
     response = await tryMetadataDiscovery(rootUrl, protocolVersion, fetchFn);
@@ -8934,34 +8981,34 @@ async function discoverMetadataWithFallback(serverUrl, wellKnownType, fetchFn, o
   return response;
 }
 function buildDiscoveryUrls(authorizationServerUrl) {
-  const url2 = typeof authorizationServerUrl === "string" ? new URL(authorizationServerUrl) : authorizationServerUrl;
-  const hasPath = url2.pathname !== "/";
+  const url3 = typeof authorizationServerUrl === "string" ? new URL(authorizationServerUrl) : authorizationServerUrl;
+  const hasPath = url3.pathname !== "/";
   const urlsToTry = [];
   if (!hasPath) {
     urlsToTry.push({
-      url: new URL("/.well-known/oauth-authorization-server", url2.origin),
+      url: new URL("/.well-known/oauth-authorization-server", url3.origin),
       type: "oauth"
     });
     urlsToTry.push({
-      url: new URL(`/.well-known/openid-configuration`, url2.origin),
+      url: new URL(`/.well-known/openid-configuration`, url3.origin),
       type: "oidc"
     });
     return urlsToTry;
   }
-  let pathname = url2.pathname;
+  let pathname = url3.pathname;
   if (pathname.endsWith("/")) {
     pathname = pathname.slice(0, -1);
   }
   urlsToTry.push({
-    url: new URL(`/.well-known/oauth-authorization-server${pathname}`, url2.origin),
+    url: new URL(`/.well-known/oauth-authorization-server${pathname}`, url3.origin),
     type: "oauth"
   });
   urlsToTry.push({
-    url: new URL(`/.well-known/openid-configuration${pathname}`, url2.origin),
+    url: new URL(`/.well-known/openid-configuration${pathname}`, url3.origin),
     type: "oidc"
   });
   urlsToTry.push({
-    url: new URL(`${pathname}/.well-known/openid-configuration`, url2.origin),
+    url: new URL(`${pathname}/.well-known/openid-configuration`, url3.origin),
     type: "oidc"
   });
   return urlsToTry;
@@ -9375,9 +9422,9 @@ var StreamableHTTPError = class extends Error {
   }
 };
 var StreamableHTTPClientTransport = class {
-  constructor(url2, opts) {
+  constructor(url3, opts) {
     this._hasCompletedAuthFlow = false;
-    this._url = url2;
+    this._url = url3;
     this._resourceMetadataUrl = void 0;
     this._scope = void 0;
     this._requestInit = opts?.requestInit;
@@ -9866,26 +9913,6 @@ var StdioServerTransport = class {
 };
 
 // plugin/server/bridge-source.mjs
-var configurationPath = join(homedir(), ".penpot-for-chatgpt", "connection.json");
-async function connectionURL() {
-  if (process.env.PENPOT_MCP_URL) return validate2(process.env.PENPOT_MCP_URL);
-  const config2 = JSON.parse(await readFile(configurationPath, "utf8"));
-  if (config2.dpapi && process.platform === "win32") {
-    const script = '$c = Get-Content -LiteralPath $env:PENPOT_CONNECTION_FILE -Raw | ConvertFrom-Json; $s = ConvertTo-SecureString $c.dpapi; [System.Net.NetworkCredential]::new("", $s).Password';
-    const { stdout } = await promisify(execFile)("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {
-      env: { ...process.env, PENPOT_CONNECTION_FILE: configurationPath },
-      windowsHide: true,
-      timeout: 1e4
-    });
-    return validate2(stdout.trim());
-  }
-  throw new Error("Missing local connection");
-}
-function validate2(value) {
-  const url2 = new URL(value.trim());
-  if (url2.protocol !== "https:" || url2.hostname !== "design.penpot.app" || url2.port || url2.pathname !== "/mcp/stream" || url2.username || url2.password || url2.hash || !url2.searchParams.get("userToken")) throw new Error("Invalid official connection");
-  return url2;
-}
 var remote;
 var local;
 var stopping = false;
@@ -9894,8 +9921,15 @@ async function stop() {
   stopping = true;
   await Promise.allSettled([remote?.close(), local?.close()]);
 }
+var url2;
 try {
-  const url2 = await connectionURL();
+  url2 = await connectionURL();
+} catch (error2) {
+  process.stderr.write(`${error2.message}
+`);
+  process.exitCode = 1;
+}
+if (url2) try {
   remote = new StreamableHTTPClientTransport(url2, {
     fetch: (input, init) => fetch(input, { ...init, redirect: "error" })
   });
@@ -9923,7 +9957,7 @@ try {
   await remote.start();
   await local.start();
 } catch {
-  process.stderr.write("Penpot is not configured. Run penpot-setup.ps1 on Windows, or set PENPOT_MCP_URL in the desktop application environment. Requires Node.js 22+.\n");
+  process.stderr.write("Penpot bridge startup failed. Check Node.js 22+ and restart the host MCP connection.\n");
   await stop();
   process.exitCode = 1;
 }

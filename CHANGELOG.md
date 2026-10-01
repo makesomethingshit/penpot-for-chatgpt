@@ -13,3 +13,6 @@ Development changes are unnumbered. The first release will be `0.1.0` at deploym
 - Verify packaged file lists and content; include SHA-256 checksums and downloadable CI artifacts.
 - Add contributor instructions and consistent text line endings.
 - Synchronize manifests and replace publisher placeholders.
+- Share URL validation between setup and the bridge, rejecting duplicate and blank tokens.
+- Report safe configuration errors and avoid inherited PowerShell module-path conflicts during DPAPI decryption.
+- Verify Windows setup, encrypted credential round-trip and preservation on invalid input.

@@ -108,14 +108,17 @@ test('reject untrusted endpoints before sending a request', { timeout: 15000 }, 
     `https://user:pass@design.penpot.app/mcp/stream?userToken=${token}`,
     `https://design.penpot.app:8443/mcp/stream?userToken=${token}`,
     `https://design.penpot.app/wrong?userToken=${token}`,
-    'https://design.penpot.app/mcp/stream?userToken='
+    'https://design.penpot.app/mcp/stream?userToken=',
+    'https://design.penpot.app/mcp/stream?userToken=&userToken=' + token,
+    'https://design.penpot.app/mcp/stream?userToken=' + token + '&userToken=',
+    'https://design.penpot.app/mcp/stream?userToken=%20'
   ]) {
     const runtime = bridge(t, url);
     let stdout = '';
     runtime.child.stdout.on('data', data => { stdout += data; });
     assert.equal((await once(runtime.child, 'exit'))[0], 1);
     assert.equal(stdout, '');
-    assert.match(runtime.stderr(), /not configured/);
+    assert.match(runtime.stderr(), /Invalid Penpot MCP URL/);
     assert.ok(!runtime.stderr().includes(token));
   }
 });

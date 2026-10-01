@@ -46,10 +46,11 @@ For the Git-backed marketplace:
 
 ```sh
 codex plugin marketplace upgrade penpot-for-chatgpt
-codex plugin add penpot-for-chatgpt@penpot-for-chatgpt
 ```
 
 For a local checkout, update that checkout before re-adding the plugin. Reload your desktop host's MCP connection. Your connection file lives outside the plugin and does not need to be re-entered unless the Penpot key changed.
+
+Codex may assign its own cache version when a development manifest omits `version`. That internal label is not this project's release number; use the Git commit to identify development builds.
 
 ### Download a verified package
 
@@ -97,6 +98,10 @@ The bridge forwards official tool schemas, responses, pagination and images. It 
 | --- | --- |
 | No tools | Node.js 22+ on the app's PATH, local credentials, and MCP startup. |
 | Authentication fails | Your URL/key in Penpot Integrations; update the local configuration. |
+| Connection is missing | Run the Windows setup script or set `PENPOT_MCP_URL` in the host environment. |
+| Connection file is damaged | Run setup again to replace the invalid file. |
+| Cannot decrypt the connection | Run setup as the Windows user that runs the desktop host. |
+| Invalid MCP URL | Copy the full official URL; use exactly one non-empty `userToken`. |
 | Documentation works, design calls fail | Connect MCP inside the intended file and wake its browser tab. |
 | Wrong file/page | Verify the active MCP tab and focused page before requesting a change. |
 | Web/mobile cannot start the bridge | Use a desktop host able to run local stdio MCP processes. |
@@ -114,6 +119,8 @@ npm run package
 ```
 
 SDK and esbuild versions are pinned in `package-lock.json`. The build generates `plugin/server/bridge.mjs`, metadata and licenses for dependencies actually bundled. Tests use Node's built-in runner and synthetic credentials without contacting Penpot. They cover initialization, GET/POST redirect refusal, schemas/pagination/images, session/protocol headers, safe errors and process shutdown.
+
+The setup script and bridge share the same URL validator. On Windows, tests run setup in a temporary user profile, round-trip DPAPI, and verify rejected input preserves the existing configuration. Settings errors distinguish missing, unreadable, damaged and undecryptable credentials without printing their contents.
 
 `npm run check` validates manifests, five skills, local links, icons and the marketplace entry. `npm run package` writes one standalone plugin directory to `dist/penpot-for-chatgpt-preview.tar.gz` and a `SHA256SUMS` file. It allows only the required files, then reads back the archive and compares every file with the source. It excludes npm dependencies, Git data, tests and the marketplace catalog.
 

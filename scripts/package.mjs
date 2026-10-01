@@ -11,7 +11,8 @@ await mkdir('dist', { recursive: true });
 const staging = await mkdtemp(resolve('dist/staging-'));
 const files = ['.codex-plugin/plugin.json', '.mcp.json', 'mcp.json', 'plugin.json', 'README.md',
   'assets/icon.png', 'assets/icon-dark.png', 'server/bridge-source.mjs', 'server/bridge.mjs',
-  'server/build-info.json', 'server/THIRD_PARTY_NOTICES.txt', 'scripts/penpot-setup.ps1',
+  'server/build-info.json', 'server/THIRD_PARTY_NOTICES.txt', 'server/connection.mjs',
+  'scripts/penpot-setup.ps1', 'scripts/validate-connection.mjs',
   ...(await readdir('plugin/skills')).map(skill => `skills/${skill}/SKILL.md`)];
 function tar(args) {
   const result = spawnSync('tar', args, { encoding: 'utf8' });
