@@ -10,11 +10,14 @@ assert.equal(marketplace.plugins[0].source.path, './plugin');
 process.chdir('plugin');
 const plugin = await json('plugin.json');
 const legacy = await json('.codex-plugin/plugin.json');
-for (const field of ['name', 'version', 'description', 'author', 'keywords']) {
+for (const field of ['name', 'version', 'description', 'author', 'homepage', 'repository', 'keywords']) {
   assert.deepEqual(legacy[field], plugin[field], `Compatibility manifest: ${field}`);
 }
 assert.equal(pkg.version, plugin.version);
 assert.equal(pkg.name, plugin.name);
+assert.equal(marketplace.plugins[0].name, plugin.name);
+assert.equal(legacy.skills, './skills');
+assert.equal(legacy.mcpServers, './.mcp.json');
 assert.deepEqual(legacy.interface, plugin.extensions['com.openai'].interface);
 assert.match(plugin.version, /^\d+\.\d+\.\d+$/);
 const ui = legacy.interface;
@@ -29,6 +32,9 @@ for (const field of ['logo', 'logoDark', 'composerIcon', 'composerIconDark']) {
   assert.ok(image.length <= 5 * 1024 * 1024);
 }
 assert.deepEqual((await json('mcp.json')).mcpServers, (await json('.mcp.json')).mcpServers);
+assert.deepEqual((await json('mcp.json')).mcpServers.penpot, {
+  type: 'stdio', command: 'node', args: ['${PLUGIN_ROOT}/server/bridge.mjs'], cwd: '${PLUGIN_ROOT}'
+});
 assert.ok((await stat('server/bridge.mjs')).size > 0);
 assert.equal((await json('server/build-info.json')).sdk, pkg.dependencies['@modelcontextprotocol/sdk']);
 const skills = await readdir('skills');

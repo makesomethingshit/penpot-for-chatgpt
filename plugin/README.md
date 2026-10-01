@@ -1,4 +1,4 @@
-# Penpot for ChatGPT 0.1.3
+# Penpot for ChatGPT 0.1.4
 
 Five Penpot design skills with a desktop bridge to the official SaaS MCP server. Requires Node.js 22+ on your desktop host's PATH and Agent Plugin installation support. Installation does not authenticate your Penpot account. This is an independent integration, not an official Penpot or OpenAI product.
 
@@ -30,5 +30,7 @@ Specialists follow `penpot-use`. Inspection/audit stays read-only; edits preserv
 - No tools: check Node.js 22+, your desktop host's PATH and local configuration.
 - Authentication failure: check the configured URL/key in Penpot Integrations.
 - Documentation succeeds but design calls fail: wake the tab and connect MCP in the intended file.
+
+See the [source repository](https://github.com/makesomethingshit/penpot-for-chatgpt) for installation updates and development instructions. Repository access is required while it remains private; the project's source license is undecided.
 
 Penpot owns the icon artwork from its [media kit](https://penpot.app/media-kit). It identifies the connected service and does not imply endorsement. Bundled software licenses are in `server/THIRD_PARTY_NOTICES.txt`.
