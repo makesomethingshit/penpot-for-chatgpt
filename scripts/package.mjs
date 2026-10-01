@@ -13,7 +13,8 @@ const files = ['.codex-plugin/plugin.json', '.mcp.json', 'mcp.json', 'plugin.jso
   'assets/icon.png', 'assets/icon-dark.png', 'server/bridge-source.mjs', 'server/bridge.mjs',
   'server/build-info.json', 'server/THIRD_PARTY_NOTICES.txt', 'server/connection.mjs',
   'scripts/penpot-setup.ps1', 'scripts/validate-connection.mjs',
-  ...(await readdir('plugin/skills')).map(skill => `skills/${skill}/SKILL.md`)];
+  ...(await readdir('plugin/skills')).map(skill => `skills/${skill}/SKILL.md`),
+  'skills/penpot-design-system/references/build-from-code.md'];
 function tar(args) {
   const result = spawnSync('tar', args, { encoding: 'utf8' });
   if (result.error) throw result.error;

@@ -15,8 +15,10 @@ The skills inspect the live design first, preserve components and tokens, and ve
 | `penpot-use` | "List the boards on the current page without changing anything." |
 | `penpot-design-to-code` | "Implement the selected screen in this project's existing frontend." |
 | `penpot-generate-design` | "Create a mobile variant beside this board using the same components." |
-| `penpot-design-system` | "Inspect token aliases and identify consolidation candidates." |
+| `penpot-design-system` | "Build the requested button family and its tokens from this project's code." |
 | `penpot-audit` | "Audit this checkout flow and show evidence for each issue." |
+
+The design-system skill supports scoped creation as well as maintenance: map existing code tokens and component props, reuse compatible assets, then build foundations, components and requested variants. It includes read-only catalog and guarded token-creation examples; generating a system does not publish a shared library.
 
 ## Install in Codex
 

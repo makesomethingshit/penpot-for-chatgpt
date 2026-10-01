@@ -22,7 +22,7 @@ Only `https://design.penpot.app/mcp/stream` with your `userToken` is accepted. H
 | `penpot-use` | Inspect, edit within scope, export and verify. |
 | `penpot-design-to-code` | Translate designs into the existing frontend or semantic HTML/CSS. |
 | `penpot-generate-design` | Create screens and responsive variants using existing components/tokens. |
-| `penpot-design-system` | Inspect or maintain tokens, themes, components and variants. |
+| `penpot-design-system` | Inspect, create or maintain tokens, themes, components and variants, including from code. |
 | `penpot-audit` | Report evidenced usability, consistency and accessibility issues. |
 
 Specialists follow `penpot-use`. Inspection/audit stays read-only; edits preserve unrelated work and require read-back and previews for visual verification. Code implementation needs workspace tools. Remote MCP exports cannot write directly to arbitrary local paths.

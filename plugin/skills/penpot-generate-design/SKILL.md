@@ -7,6 +7,8 @@ description: Create or adapt Penpot screens, boards and responsive variants from
 
 First read and follow [penpot-use](../penpot-use/SKILL.md). Inspect the active file/page, requested references, target IDs, libraries and a representative rendered board before creation.
 
+For building reusable components or a design system from code, use [penpot-design-system](../penpot-design-system/SKILL.md); return here to compose the requested screens from its assets.
+
 ## Fit the existing design
 
 Extract the screen's purpose, audience, required content/actions and requested sizes. Read relevant source code or supplied references when available. Reuse observed navigation, grid, spacing, color, typography, component states and naming conventions. Distinguish supplied requirements and observed patterns from new layout/content choices.

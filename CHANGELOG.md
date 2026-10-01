@@ -16,3 +16,4 @@ Development changes are unnumbered. The first release will be `0.1.0` at deploym
 - Share URL validation between setup and the bridge, rejecting duplicate and blank tokens.
 - Report safe configuration errors and avoid inherited PowerShell module-path conflicts during DPAPI decryption.
 - Verify Windows setup, encrypted credential round-trip and preservation on invalid input.
+- Extend the existing design-system skill with scoped code-to-system creation, source mappings and executable catalog/token examples; retain five skills.

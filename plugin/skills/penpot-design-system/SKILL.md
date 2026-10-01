@@ -1,11 +1,21 @@
 ---
 name: penpot-design-system
-description: Inspect, explain or make scoped updates to Penpot design tokens, themes, colors, typography, components and variants while preserving aliases, library ownership, naming conventions and dependent instances.
+description: Inspect, create or update Penpot tokens, themes, colors, typography, components and variants, including a scoped system from existing code while preserving aliases, library ownership and dependent instances.
 ---
 
 # Penpot design system
 
 First read and follow [penpot-use](../penpot-use/SKILL.md). A request to inspect, compare or propose a cleanup remains read-only. Preserve conventions discovered in the connected file; do not impose a new token scale or component taxonomy.
+
+## Choose the deliverable
+
+- **Tokens or foundations:** create only the requested tokens, themes, colors or typography; do not also generate components or specimen boards.
+- **One component or family:** reuse compatible foundations, add only missing tokens, and build the requested states and variants.
+- **A system from code:** inspect the existing source and build the requested foundations and component families in dependency order.
+
+For any creation sourced from code, including tokens alone or one component, read [Build from code](references/build-from-code.md) for source mapping, creation and executable inspection/token examples.
+
+For new reusable components, use this skill; use [penpot-generate-design](../penpot-generate-design/SKILL.md) when composing screens from those components. A request for a system does not authorize publishing or connecting a shared library.
 
 ## Inspect ownership and usage
 
