@@ -1,0 +1,10 @@
+node_modules/
+dist/
+*.zip
+*.tar.gz
+.env
+.env.*
+!.env.example
+connection.json
+connection-*.tmp
+.penpot-for-chatgpt/

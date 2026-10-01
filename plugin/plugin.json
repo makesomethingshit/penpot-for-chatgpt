@@ -1,0 +1,41 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "penpot-for-chatgpt",
+  "version": "0.1.3",
+  "description": "Desktop Penpot assistant with five skills and a bundled local bridge to the official authenticated Penpot MCP server.",
+  "author": {
+    "name": "makesomethingshit"
+  },
+  "keywords": [
+    "penpot",
+    "design",
+    "design-to-code",
+    "design-system",
+    "audit"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Penpot for ChatGPT",
+        "shortDescription": "Your Penpot design assistant",
+        "longDescription": "A desktop Penpot assistant for inspecting and editing designs, translating designs into code, generating screens, maintaining tokens and components, and auditing consistency and accessibility. Includes a local MCP transport bridge; requires Node.js 22 or later and one-time configuration of your official Penpot MCP connection URL on your PC. Keeps credentials outside the package. Inspects first, preserves existing conventions, favors minimal changes and verifies mutations. Desktop only. An independent plugin, not an official Penpot or OpenAI integration.",
+        "developerName": "makesomethingshit",
+        "category": "Productivity",
+        "capabilities": [
+          "Interactive"
+        ],
+        "logo": "./assets/icon.png",
+        "logoDark": "./assets/icon-dark.png",
+        "composerIcon": "./assets/icon.png",
+        "composerIconDark": "./assets/icon-dark.png",
+        "brandColor": "#151035",
+        "brandColorDark": "#FFFFFF",
+        "defaultPrompt": [
+          "Inspect the current Penpot selection and explain its structure and design-system conventions.",
+          "Turn the selected Penpot screen into responsive code while preserving its design.",
+          "Create a screen using this Penpot file's existing components and tokens, then verify the result."
+        ]
+      }
+    }
+  }
+}
