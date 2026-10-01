@@ -4,6 +4,7 @@ import { resolve, relative, dirname } from 'node:path';
 
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
 const pkg = await json('package.json');
+const lock = await json('package-lock.json');
 const marketplace = await json('.agents/plugins/marketplace.json');
 assert.equal(marketplace.plugins.length, 1);
 assert.equal(marketplace.plugins[0].source.path, './plugin');
@@ -14,12 +15,14 @@ for (const field of ['name', 'version', 'description', 'author', 'homepage', 're
   assert.deepEqual(legacy[field], plugin[field], `Compatibility manifest: ${field}`);
 }
 assert.equal(pkg.version, plugin.version);
+assert.equal(lock.version, pkg.version);
+assert.equal(lock.packages[''].version, pkg.version);
 assert.equal(pkg.name, plugin.name);
 assert.equal(marketplace.plugins[0].name, plugin.name);
 assert.equal(legacy.skills, './skills');
 assert.equal(legacy.mcpServers, './.mcp.json');
 assert.deepEqual(legacy.interface, plugin.extensions['com.openai'].interface);
-assert.match(plugin.version, /^\d+\.\d+\.\d+$/);
+if (plugin.version !== undefined) assert.match(plugin.version, /^\d+\.\d+\.\d+$/);
 const ui = legacy.interface;
 assert.ok([...ui.shortDescription].length <= 30);
 for (const field of ['logo', 'logoDark', 'composerIcon', 'composerIconDark']) {
@@ -48,5 +51,5 @@ for (const name of skills) {
     await stat(resolve(dirname(path), match[1]));
   }
 }
-console.log(`Package valid: ${plugin.name} ${plugin.version}, ${skills.length} skills.`);
+console.log(`Package valid: ${plugin.name} ${plugin.version ?? '(unreleased)'}, ${skills.length} skills.`);
 process.chdir('..');

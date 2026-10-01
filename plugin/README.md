@@ -1,4 +1,6 @@
-# Penpot for ChatGPT 0.1.4
+# Penpot for ChatGPT
+
+Unreleased development package. The first release will be numbered `0.1.0` at deployment.
 
 Five Penpot design skills with a desktop bridge to the official SaaS MCP server. Requires Node.js 22+ on your desktop host's PATH and Agent Plugin installation support. Installation does not authenticate your Penpot account. This is an independent integration, not an official Penpot or OpenAI product.
 

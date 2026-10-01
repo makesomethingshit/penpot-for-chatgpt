@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 
 const { name, version } = JSON.parse(await readFile('plugin/plugin.json', 'utf8'));
+const filename = `${name}-${version ?? 'preview'}.tar.gz`;
 await import('./check.mjs');
 await mkdir('dist', { recursive: true });
 const staging = await mkdtemp(resolve('dist/staging-'));
@@ -25,7 +26,7 @@ try {
     await mkdir(resolve(destination, '..'), { recursive: true });
     await cp(join('plugin', file), destination, { recursive: true });
   }
-  const archive = resolve(`dist/${name}-${version}.tar.gz`);
+  const archive = resolve('dist', filename);
   tar(['-czf', archive, '-C', staging, name]);
   const listed = tar(['-tzf', archive]).trim().split(/\r?\n/).filter(path => !path.endsWith('/'));
   assert.deepEqual(listed.sort(), files.map(file => `${name}/${file}`).sort());
@@ -37,7 +38,7 @@ try {
       `Packaged content changed: ${file}`);
   }
   const digest = createHash('sha256').update(await readFile(archive)).digest('hex');
-  await writeFile('dist/SHA256SUMS', `${digest}  ${name}-${version}.tar.gz\n`);
+  await writeFile('dist/SHA256SUMS', `${digest}  ${filename}\n`);
   console.log(archive);
   console.log(`Verified ${files.length} packaged files; SHA-256: ${digest}`);
 } finally { await rm(staging, { recursive: true, force: true }); }

@@ -1,6 +1,5 @@
 {
   "name": "penpot-for-chatgpt",
-  "version": "0.1.4",
   "private": true,
   "type": "module",
   "description": "Penpot design skills and a desktop bridge to the official MCP server.",

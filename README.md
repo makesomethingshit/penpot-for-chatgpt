@@ -4,6 +4,8 @@
 
 Five design skills and a desktop MCP bridge for working with your existing Penpot files. Inspect a screen, implement it in code, create a responsive variant, maintain a design system, or audit a flow.
 
+This is an unnumbered development package. The first release will be `0.1.0` when deployed.
+
 The skills inspect the live design first, preserve components and tokens, and verify changes with read-back and exported previews. This is an independent integration, not an official Penpot or OpenAI product.
 
 ## What you can do
@@ -113,7 +115,7 @@ npm run package
 
 SDK and esbuild versions are pinned in `package-lock.json`. The build generates `plugin/server/bridge.mjs`, metadata and licenses for dependencies actually bundled. Tests use Node's built-in runner and synthetic credentials without contacting Penpot. They cover initialization, GET/POST redirect refusal, schemas/pagination/images, session/protocol headers, safe errors and process shutdown.
 
-`npm run check` validates manifests, five skills, local links, icons and the marketplace entry. `npm run package` writes one standalone plugin directory to `dist/penpot-for-chatgpt-<version>.tar.gz` and a `SHA256SUMS` file. It allows only the required files, then reads back the archive and compares every file with the source. It excludes npm dependencies, Git data, tests and the marketplace catalog.
+`npm run check` validates manifests, five skills, local links, icons and the marketplace entry. `npm run package` writes one standalone plugin directory to `dist/penpot-for-chatgpt-preview.tar.gz` and a `SHA256SUMS` file. It allows only the required files, then reads back the archive and compares every file with the source. It excludes npm dependencies, Git data, tests and the marketplace catalog.
 
 CI rebuilds and tests on Node.js 22 on Windows and Linux, then stores the verified Linux package as an artifact. See [CONTRIBUTING.md](CONTRIBUTING.md) for source changes and bug-report details.
 
