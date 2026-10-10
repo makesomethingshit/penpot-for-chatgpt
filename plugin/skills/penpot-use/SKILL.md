@@ -26,31 +26,26 @@ If the pinned session disconnects, disappears, or its storage/file/page guard fa
 
 For older remote/host schemas **without `sessionId`**, keep the single active tab fixed, use the same-execution file/page/target guards for all reads and writes, and guard immediately before an explicit-shape export. No extra single-session prompt is needed. This cannot guarantee atomic export routing or distinguish same-file/same-page tabs; stop if tab ownership is ambiguous rather than claiming safety. Restore the existing tab and re-inspect on disconnect. The 2026-10-11 live host exposed only `execute_code({ code })` and `export_shape({ shapeId, format, mode })`; its `user:read` permission was unavailable. Two-tab session isolation remains unverified on that host.
 
-A read-only starting example, after reading the live overview. Resolve explicitly requested IDs in the intended page before this call and put them in `requestedIds`; leave it empty only when the request uses the captured selection. This initialization runs once per task. After completing a task (or an explicit re-selection), clear only `storage.penpotTask` and `storage.penpotTaskSelection`; do not clear unrelated storage or silently reset during work:
+A read-only starting example, after reading the live overview. Resolve explicitly requested IDs in the intended page before this call and put them in `requestedIds`; leave it empty only when the request uses the captured selection. Set `fullPageInventory` to `true` for an explicitly requested page-wide listing **even when another board is selected**. This initialization runs once per task. After completing a task (or an explicit re-selection), clear only `storage.penpotTask` and `storage.penpotTaskSelection`; do not clear unrelated storage or silently reset during work:
 
 ```javascript
 const file = penpot.currentFile;
 const page = penpot.currentPage;
 if (!file || !page) throw new Error("Open a Penpot file and connect MCP.");
 if (storage.penpotTask) throw new Error("A target is already pinned; continue that task or explicitly finish it first.");
-storage.penpotTaskSelection = [...penpot.selection];
+const selection = [...penpot.selection];
 const sessionId = undefined; // Set to the established Penpot session ID when supported.
 const requestedIds = []; // Replace with the explicitly resolved IDs, when supplied.
-const targetIds = requestedIds.length ? requestedIds : storage.penpotTaskSelection.map(shape => shape.id);
+const fullPageInventory = false; // Set true for an explicit page-wide inventory, regardless of selection.
+if (fullPageInventory && requestedIds.length) throw new Error("Choose a page inventory or explicit IDs, not both.");
+const targetIds = fullPageInventory ? [] : requestedIds.length ? requestedIds : selection.map(shape => shape.id);
 const targets = targetIds.map(id => penpotUtils.findShape(shape => shape.id === id, page.root));
 if (targets.some(shape => !shape)) throw new Error("A requested target is missing from the intended page.");
-storage.penpotTask = {
-  fileId: file.id,
-  pageId: page.id,
-  sessionId,
-  targetIds
-};
-return {
+// Compute first: if inspection fails, leave stored task state untouched so retry remains possible.
+const response = {
   file: { id: file.id, name: file.name },
   page: { id: page.id, name: page.name },
-  selection: storage.penpotTaskSelection.map(shape => ({
-    id: shape.id, name: shape.name, type: shape.type
-  })),
+  selection: selection.map(shape => ({ id: shape.id, name: shape.name, type: shape.type })),
   structure: targets.map(shape => penpotUtils.shapeStructure(shape, 2)),
   inventory: targets.length ? undefined : {
     items: page.root.children.slice(0, 50).map(shape => ({ id: shape.id, name: shape.name, type: shape.type })),
@@ -58,6 +53,9 @@ return {
     nextOffset: page.root.children.length > 50 ? 50 : null
   }
 };
+storage.penpotTaskSelection = selection;
+storage.penpotTask = { fileId: file.id, pageId: page.id, sessionId, targetIds };
+return response;
 ```
 
 For an explicit full-page inventory, ignore any unrelated live selection and enumerate direct children in batches of 50 using `slice(offset, offset + 50)` and report the total and next offset. Guard the pinned file/page on each subsequent read, resolve a chosen ID with `penpotUtils.findShape` and expand only that subtree with `shapeStructure(shape, 2)`. Never silently truncate IDs or verification evidence: reduce depth, paginate inventory, or split target reads and state what remains unread. This bounds the example, not all possible subtree sizes; a very wide target may need staged reads.
