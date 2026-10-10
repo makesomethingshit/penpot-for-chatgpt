@@ -24,14 +24,14 @@ The design-system skill supports scoped creation as well as maintenance: map exi
 
 Requires Node.js 22+ on the desktop application's PATH, a plugin-capable Codex client, and an account on [Penpot](https://design.penpot.app/).
 
-For users with access to this private GitHub repository:
+Install from the public GitHub repository:
 
 ```sh
-codex plugin marketplace add git@github.com:makesomethingshit/penpot-for-chatgpt.git
+codex plugin marketplace add https://github.com/makesomethingshit/penpot-for-chatgpt.git
 codex plugin add penpot-for-chatgpt@penpot-for-chatgpt
 ```
 
-Git/SSH authentication must already work on your machine. Do not copy an SSH key or GitHub token into this plugin. If you already cloned the repository, register the local checkout instead:
+Do not copy an SSH key or GitHub token into this plugin. If you already cloned the repository, register the local checkout instead:
 
 ```sh
 codex plugin marketplace add .
@@ -56,7 +56,7 @@ Codex may assign its own cache version when a development manifest omits `versio
 
 ### Download a verified package
 
-Open a successful [Check workflow run](https://github.com/makesomethingshit/penpot-for-chatgpt/actions/workflows/check.yml) for the commit you want and download its `penpot-plugin` artifact. Extract GitHub's artifact ZIP to obtain the standalone `.tar.gz` and `SHA256SUMS`. Artifacts expire after 14 days and require access to this private repository. Build locally if the artifact has expired.
+Open a successful [Check workflow run](https://github.com/makesomethingshit/penpot-for-chatgpt/actions/workflows/check.yml) for the commit you want and download its `penpot-plugin` artifact. Extract GitHub's artifact ZIP to obtain the standalone `.tar.gz` and `SHA256SUMS`. Artifacts expire after 14 days; GitHub requires sign-in to download workflow artifacts. Build locally if the artifact has expired.
 
 ## Connect your Penpot account
 
@@ -151,4 +151,4 @@ Inspection and audit stay read-only. Edits preserve unrelated boards and compone
 
 Icons use the official symbols from the [Penpot media kit](https://penpot.app/media-kit); Penpot retains its brand rights. This project does not claim endorsement or ownership. Bundled dependency licenses are in [THIRD_PARTY_NOTICES.txt](plugin/server/THIRD_PARTY_NOTICES.txt).
 
-The repository is private and the project's source license is undecided. It is not yet a public open-source release. See the [changelog](CHANGELOG.md).
+The repository is public and the project's source license is undecided. Public visibility does not grant a redistribution license. See the [changelog](CHANGELOG.md).

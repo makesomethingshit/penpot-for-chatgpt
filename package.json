@@ -14,7 +14,7 @@
     "doctor": "node plugin/scripts/penpot-doctor.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.31.0"
+    "@modelcontextprotocol/sdk": "1.32.1"
   },
   "devDependencies": {
     "esbuild": "0.28.2"
