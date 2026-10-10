@@ -18,9 +18,9 @@ Apply this workflow before every Penpot task. This desktop package includes a lo
 
 Read the actual input schemas; do not invent a session-list tool. In upstream Penpot's multi-session API, `execute_code` and `export_shape` accept optional `sessionId`. `high_level_overview` takes no session argument and `penpot_api_info` takes `type` and optional `member`: these return server documentation, not a target design. See the [upstream tool schema](https://github.com/penpot/penpot/blob/10955f17e27943429a10e90360d0404e3f56e27c/mcp/packages/server/src/Tool.ts) and [multi-file workflow](https://github.com/penpot/penpot/blob/10955f17e27943429a10e90360d0404e3f56e27c/mcp/README.md#working-with-multiple-files). Upstream development support does not prove that the connected SaaS or host exposes it.
 
-When `sessionId` is exposed, use a user-supplied session ID or a read-only call to discover the server's ambiguity response. With several connected sessions, have the user select one of the reported IDs; do not guess from order, file names or recent focus. With exactly one, the server can auto-select it without a routine prompt; obtain its short ID from the supported plugin UI when available and retain it in the task context. Do not use a transport `Mcp-Session-Id` header or the user's authentication token as the Penpot tab ID. Do not request `user:read` or change permissions just to obtain an ID.
+When `sessionId` is exposed, use a user-supplied session ID or a read-only call to discover the server's ambiguity response. Check `execute_code` and `export_shape` independently: a selector in one tool's schema does not imply a selector in the other, and complete workflow routing is supported only when both expose it. With several connected sessions, have the user select one of the reported IDs; do not guess from order, file names or recent focus. With exactly one, the server can auto-select it without a routine prompt; obtain its short ID from the supported plugin UI when available and retain it in the task context. Do not use a transport `Mcp-Session-Id` header or the user's authentication token as the Penpot tab ID. Do not request `user:read` or change permissions just to obtain an ID.
 
-Record the chosen session alongside the file/page/shape IDs, both in the agent's task context and as `storage.penpotTask.sessionId` below. Pass that same `sessionId` to **every** `execute_code` and `export_shape` call that accepts it, including read-back and retries; omit it only from tools whose schema does not support it. If explicit routing cannot be established, do not claim multi-tab isolation.
+Record the chosen session alongside the file/page/shape IDs, both in the agent's task context and as `storage.penpotTask.sessionId` below. Pass that same `sessionId` to **every** `execute_code` and `export_shape` call whose own schema accepts it, including read-back and retries; omit it only from tools whose schema does not support it. If both tools are needed but only one accepts the selector, treat complete explicit routing as unavailable and do not claim multi-tab isolation.
 
 If the pinned session disconnects, disappears, or its storage/file/page guard fails, stop writes and exports. Retry a read-only call to that same ID after restoring its existing connection. Never omit the ID to fall back to another tab. Resume only after the intended session/context is verified; an intentional new target requires explicit re-selection and fresh inspection.
 
@@ -83,9 +83,18 @@ For creation, guard the same file/page IDs and resolve the planned destination c
 Apply the following decision to **actual reported session IDs and actual tool schemas**, outside Penpot's `execute_code` sandbox. It is a decision example, not a new MCP tool. Never fabricate a session inventory or assume a single tab from a successful documentation call.
 
 ```javascript
-const supportsSessionId = false; // Replace only after checking both live execute_code and export_shape tool schemas.
+const executeCodeSupportsSessionId = false; // Replace only after checking the live execute_code schema.
+const exportShapeSupportsSessionId = false; // Replace only after checking the live export_shape schema.
+const supportsSessionId = executeCodeSupportsSessionId && exportShapeSupportsSessionId;
 const reportedIds = []; // Only IDs explicitly reported by Penpot or chosen by the user; [] means unknown.
 const chosenId = undefined; // Explicit user/session choice when supported.
+const confirmedOneConnectedTab = false; // Set true only after an explicit confirmation that exactly one tab is connected.
+if (supportsSessionId && reportedIds.length === 0) {
+  throw new Error("No Penpot sessions are reported; re-establish the intended route before editing or exporting.");
+}
+if (!supportsSessionId && reportedIds.length === 0 && !confirmedOneConnectedTab) {
+  throw new Error("Penpot session inventory is unknown; explicitly confirm exactly one connected tab before editing or exporting.");
+}
 if (reportedIds.length > 1 && !supportsSessionId) {
   throw new Error("Multiple Penpot sessions but no route selector; keep one tab connected before editing.");
 }
