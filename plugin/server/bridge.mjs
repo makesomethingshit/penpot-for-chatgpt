@@ -10022,11 +10022,12 @@ var pendingRequests = /* @__PURE__ */ new Map();
 function failPendingRequest(id, message) {
   if (!pendingRequests.delete(id) || stopping) return;
   if (initializeRequestId === id) initializeRequestId = void 0;
-  writeOutput(output, serializeMessage({ jsonrpc: "2.0", id,
+  writeOutput(output, serializeMessage({
+    jsonrpc: "2.0",
+    id,
     error: { code: -32e3, message }
   }));
 }
-
 async function stop() {
   if (stopping) return;
   stopping = true;
@@ -10059,10 +10060,9 @@ async function boundedFetch(input, init) {
   if (sse && init.method === "POST" && typeof init.body === "string") {
     try {
       const messages = JSON.parse(init.body);
-      postRequestIds = (Array.isArray(messages) ? messages : [messages])
-        .filter(message => message && message.method && Object.hasOwn(message, "id"))
-        .map(message => message.id);
-    } catch { /* Never log a sensitive request body. */ }
+      postRequestIds = (Array.isArray(messages) ? messages : [messages]).filter((message) => message && message.method && Object.hasOwn(message, "id")).map((message) => message.id);
+    } catch {
+    }
   }
   const body = response.body.pipeThrough(new TransformStream({
     transform(chunk, controller) {
@@ -10073,7 +10073,6 @@ async function boundedFetch(input, init) {
       } else {
         for (const byte of chunk) {
           if (postRequestIds.length && !resumableId) {
-            // A nonempty SSE id may allow the SDK to resume the interrupted POST.
             if (byte === 10 || byte === 13) sseIdPrefix = 0;
             else if (sseIdPrefix === 0) sseIdPrefix = byte === 105 ? 1 : -1;
             else if (sseIdPrefix === 1) sseIdPrefix = byte === 100 ? 2 : -1;
@@ -10106,8 +10105,6 @@ async function boundedFetch(input, init) {
     }
   }), { signal: init.signal });
   if (!postRequestIds.length) return new Response(body, response);
-  // The SDK handles POST SSE asynchronously: send() may resolve before the stream
-  // closes without a JSON-RPC result. Preserve backpressure and do not replay edits.
   const reader = body.getReader();
   const checkedBody = new ReadableStream({
     async pull(controller) {
@@ -10115,18 +10112,20 @@ async function boundedFetch(input, init) {
         const { value, done } = await reader.read();
         if (done) {
           controller.close();
-          if (!resumableId) setImmediate(() => postRequestIds.forEach(id =>
-            failPendingRequest(id, "Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.")
+          if (!resumableId) setImmediate(() => postRequestIds.forEach(
+            (id) => failPendingRequest(id, "Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.")
           ));
         } else controller.enqueue(value);
-      } catch (error) {
-        controller.error(error);
-        if (!resumableId) setImmediate(() => postRequestIds.forEach(id =>
-          failPendingRequest(id, "Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.")
+      } catch (error2) {
+        controller.error(error2);
+        if (!resumableId) setImmediate(() => postRequestIds.forEach(
+          (id) => failPendingRequest(id, "Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.")
         ));
       }
     },
-    cancel(reason) { return reader.cancel(reason); }
+    cancel(reason) {
+      return reader.cancel(reason);
+    }
   });
   return new Response(checkedBody, response);
 }
