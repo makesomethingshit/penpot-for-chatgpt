@@ -18,3 +18,10 @@ Development changes are unnumbered. The first release will be `0.1.0` at deploym
 - Verify Windows setup, encrypted credential round-trip and preservation on invalid input.
 - Extend the existing design-system skill with scoped code-to-system creation, source mappings and executable catalog/token examples; retain five skills.
 - Bound remote JSON/error bodies, SSE events and output backlog; terminate on overflow without exposing credentials. Add malicious-stream, stalled-output and large-image regressions.
+
+- Scope initial inspection to pinned targets; paginate shallow page inventories and test payload reductions.
+- Document native MCP session routing and legacy-host limits without inventing session APIs.
+- Add read-only local diagnostics reusing the existing URL/DPAPI resolver.
+- Validate portable manifests against external Agent Plugins 1.0.0 schemas and add invalid-package regressions.
+- Record five real-design workflow checks, partial-failure recovery, preservation and host/visual limitations.
+- Record additional Codex fixture evidence, raw HTML duplicate IDs and token-binding retry limitations; require post-recovery read-back and preview.

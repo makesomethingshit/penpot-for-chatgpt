@@ -10,20 +10,40 @@ Apply this workflow before every Penpot task. This desktop package includes a lo
 ## Connect and establish the target
 
 1. Discover the connected official Penpot tools. Use the registered remote server for `design.penpot.app` by default. The usual tools are `high_level_overview`, `penpot_api_info`, `execute_code` and `export_shape`; the host's prefix may vary. Do not invent a `use_penpot` tool or substitute a similarly named third-party server. If tools are absent, distinguish the desktop plugin's missing runtime/startup from unconfigured credentials and from a disconnected Penpot file. Use the package README and [official setup guide](https://help.penpot.app/mcp/). Do not assume reinstalling or a new conversation will solve an unconfigured connection. Never request or embed an MCP key or personal server URL in chat, code or artifacts.
-2. Read `high_level_overview` once per session, before executing code. Read `penpot_api_info` for the specific types and members needed; runtime documentation takes precedence over remembered APIs. Do not infer design-file access from successful documentation retrieval.
-3. Perform a read-only `execute_code` call to confirm the active file and page. Capture selection immediately in `storage`, including stable IDs. Start with a shallow structure and inspect only the requested subtree. A selection is a target hint, not permission to edit. If the user identifies a board or ID, resolve it in the intended page. Ask only when choosing the wrong target would materially change scope or lose data.
+2. Establish session routing using the live tool schemas as described below. Keep the chosen MCP server and session fixed across inspection, writes, verification and exports.
+3. Read `high_level_overview` once per session, before executing code. Read `penpot_api_info` for the specific types and members needed; runtime documentation takes precedence over remembered APIs. Do not infer design-file access from successful documentation retrieval.
+4. Perform a read-only `execute_code` call to confirm the active file and page. Capture selection immediately in `storage`, including stable IDs. Start with a shallow structure and inspect only the requested subtree. A selection is a target hint, not permission to edit. If the user identifies a board or ID, resolve it in the intended page. Ask only when choosing the wrong target would materially change scope or lose data.
 
-A read-only starting example, after reading the live overview:
+### Pin the MCP session when supported
+
+Read the actual input schemas; do not invent a session-list tool. In upstream Penpot's multi-session API, `execute_code` and `export_shape` accept optional `sessionId`. `high_level_overview` takes no session argument and `penpot_api_info` takes `type` and optional `member`: these return server documentation, not a target design. See the [upstream tool schema](https://github.com/penpot/penpot/blob/10955f17e27943429a10e90360d0404e3f56e27c/mcp/packages/server/src/Tool.ts) and [multi-file workflow](https://github.com/penpot/penpot/blob/10955f17e27943429a10e90360d0404e3f56e27c/mcp/README.md#working-with-multiple-files). Upstream development support does not prove that the connected SaaS or host exposes it.
+
+When `sessionId` is exposed, use a user-supplied session ID or a read-only call to discover the server's ambiguity response. With several connected sessions, have the user select one of the reported IDs; do not guess from order, file names or recent focus. With exactly one, the server can auto-select it without a routine prompt; obtain its short ID from the supported plugin UI when available and retain it in the task context. Do not use a transport `Mcp-Session-Id` header or the user's authentication token as the Penpot tab ID. Do not request `user:read` or change permissions just to obtain an ID.
+
+Record the chosen session alongside the file/page/shape IDs, both in the agent's task context and as `storage.penpotTask.sessionId` below. Pass that same `sessionId` to **every** `execute_code` and `export_shape` call that accepts it, including read-back and retries; omit it only from tools whose schema does not support it. If explicit routing cannot be established, do not claim multi-tab isolation.
+
+If the pinned session disconnects, disappears, or its storage/file/page guard fails, stop writes and exports. Retry a read-only call to that same ID after restoring its existing connection. Never omit the ID to fall back to another tab. Resume only after the intended session/context is verified; an intentional new target requires explicit re-selection and fresh inspection.
+
+For older remote/host schemas **without `sessionId`**, keep the single active tab fixed, use the same-execution file/page/target guards for all reads and writes, and guard immediately before an explicit-shape export. No extra single-session prompt is needed. This cannot guarantee atomic export routing or distinguish same-file/same-page tabs; stop if tab ownership is ambiguous rather than claiming safety. Restore the existing tab and re-inspect on disconnect. The 2026-10-11 live host exposed only `execute_code({ code })` and `export_shape({ shapeId, format, mode })`; its `user:read` permission was unavailable. Two-tab session isolation remains unverified on that host.
+
+A read-only starting example, after reading the live overview. Resolve explicitly requested IDs in the intended page before this call and put them in `requestedIds`; leave it empty only when the request uses the captured selection. This initialization runs once per task. After completing a task (or an explicit re-selection), clear only `storage.penpotTask` and `storage.penpotTaskSelection`; do not clear unrelated storage or silently reset during work:
 
 ```javascript
 const file = penpot.currentFile;
 const page = penpot.currentPage;
 if (!file || !page) throw new Error("Open a Penpot file and connect MCP.");
+if (storage.penpotTask) throw new Error("A target is already pinned; continue that task or explicitly finish it first.");
 storage.penpotTaskSelection = [...penpot.selection];
+const sessionId = undefined; // Set to the established Penpot session ID when supported.
+const requestedIds = []; // Replace with the explicitly resolved IDs, when supplied.
+const targetIds = requestedIds.length ? requestedIds : storage.penpotTaskSelection.map(shape => shape.id);
+const targets = targetIds.map(id => penpotUtils.findShape(shape => shape.id === id, page.root));
+if (targets.some(shape => !shape)) throw new Error("A requested target is missing from the intended page.");
 storage.penpotTask = {
   fileId: file.id,
   pageId: page.id,
-  targetIds: storage.penpotTaskSelection.map(shape => shape.id)
+  sessionId,
+  targetIds
 };
 return {
   file: { id: file.id, name: file.name },
@@ -31,11 +51,18 @@ return {
   selection: storage.penpotTaskSelection.map(shape => ({
     id: shape.id, name: shape.name, type: shape.type
   })),
-  structure: penpotUtils.shapeStructure(page.root, 2)
+  structure: targets.map(shape => penpotUtils.shapeStructure(shape, 2)),
+  inventory: targets.length ? undefined : {
+    items: page.root.children.slice(0, 50).map(shape => ({ id: shape.id, name: shape.name, type: shape.type })),
+    total: page.root.children.length,
+    nextOffset: page.root.children.length > 50 ? 50 : null
+  }
 };
 ```
 
-Replace selection-derived IDs with explicitly requested IDs after resolving them. Do not reset the pinned target to a new selection midway through a task. Before each mutation batch, recheck context **inside that same execution**. For editing existing shapes, use a guard like this:
+For an explicit full-page inventory, ignore any unrelated live selection and enumerate direct children in batches of 50 using `slice(offset, offset + 50)` and report the total and next offset. Guard the pinned file/page on each subsequent read, resolve a chosen ID with `penpotUtils.findShape` and expand only that subtree with `shapeStructure(shape, 2)`. Never silently truncate IDs or verification evidence: reduce depth, paginate inventory, or split target reads and state what remains unread. This bounds the example, not all possible subtree sizes; a very wide target may need staged reads.
+
+Do not reset the pinned target to a new selection midway through a task. Before each read, export preflight or mutation batch, recheck context **inside that same execution**. For editing existing shapes, use a guard like this:
 
 ```javascript
 const task = storage.penpotTask;

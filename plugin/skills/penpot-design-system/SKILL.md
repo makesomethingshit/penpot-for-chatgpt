@@ -33,7 +33,7 @@ Do not assume the same token name across sets is a duplicate: overrides and set 
 
 ## Verify system behavior
 
-Re-read the touched catalog entries, names, raw/resolved values, aliases, set order/activation and themes. Allow asynchronous token application to settle; inspect both `shape.tokens` and actual properties. Check representative dependent instances and requested themes/variants, then inspect their rendered previews for regression.
+Re-read the touched catalog entries, names, raw/resolved values, aliases, set order/activation and themes. Allow asynchronous token application to settle; inspect both `shape.tokens` and actual properties. If a binding is still missing after updates settle, re-resolve the same retained shape and token IDs in the guarded file/page and reapply only the already-authorized binding; read back both the binding and value again. Do not create another clone/token or infer the failure cause from a successful retry. Stop and report a persistent mismatch rather than retrying indefinitely. Check representative dependent instances and requested themes/variants, then inspect their rendered previews for regression. Export again after a recovery write before claiming its final visual result.
 
 For dependency-sensitive changes, verify every affected reference within the declared scope when the API permits it. If references outside that scope cannot be inspected, report the limitation and do not declare a merge or deletion safe based on guesswork.
 

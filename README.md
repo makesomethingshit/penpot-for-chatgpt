@@ -88,6 +88,18 @@ A GUI launched from a terminal may not inherit that environment; use your host's
 
 ### First check
 
+Check the prerequisites in order: (1) the host recognizes the plugin and discovers all five skills; (2) `node --version` reports 22+ on the **host's** PATH; (3) the bundled bridge exists and local credentials validate; (4) the host starts MCP and discovers the official tools; (5) a read-only design call succeeds in the intended file. A working installation needs neither reinstallation nor credential re-entry.
+
+Run this read-only local diagnostic from the repository:
+
+```sh
+npm run doctor
+```
+
+From an extracted plugin directory, use `node scripts/penpot-doctor.mjs`. It uses the same credential resolver as the bridge (including Windows DPAPI), changes no configuration, prints no URL/token/design data, and makes **no network request**. On macOS/Linux, run it in the same environment as the host with `PENPOT_MCP_URL` configured. A terminal check does not prove the GUI inherited that environment or successfully launched the bridge. If `node` itself is missing, install Node.js 22+ and verify the host PATH before this command can run.
+
+Local success is not remote authentication or live-file success. In the host: a generic connection error means network/remote/authentication still needs checking; verify connectivity and key validity in Penpot Integrations without pasting credentials. A design-call error saying no instance is connected or the tab is suspended means wake/connect the intended existing tab, then retry read-only. Do not replace valid credentials to hide a disconnected design.
+
 Reload the desktop MCP connection and ask:
 
 > Inspect the current Penpot page and list its boards without changing anything.
@@ -127,9 +139,11 @@ The bridge caps each HTTP JSON/error body, SSE event and unread output backlog a
 
 The setup script and bridge share the same URL validator. On Windows, tests run setup in a temporary user profile, round-trip DPAPI, and verify rejected input preserves the existing configuration. Settings errors distinguish missing, unreadable, damaged and undecryptable credentials without printing their contents.
 
-`npm run check` validates manifests, five skills, local links, icons and the marketplace entry. `npm run package` writes one standalone plugin directory to `dist/penpot-for-chatgpt-preview.tar.gz` and a `SHA256SUMS` file. It allows only the required files, then reads back the archive and compares every file with the source. It excludes npm dependencies, Git data, tests and the marketplace catalog.
+`npm run check` validates portable manifests against the external Agent Plugins 1.0.0 schemas (offline snapshots), a subset of documented OpenAI interface requirements, five skills, local links, icons and the marketplace entry. `npm run package` writes one standalone plugin directory to `dist/penpot-for-chatgpt-preview.tar.gz` and a `SHA256SUMS` file. It allows only the required files, then reads back the archive and compares every file with the source. It excludes npm dependencies, Git data, tests and the marketplace catalog.
 
 CI rebuilds and tests on Node.js 22 on Windows and Linux, then stores the verified Linux package as an artifact. See [CONTRIBUTING.md](CONTRIBUTING.md) for source changes and bug-report details.
+
+Real-design checks and evidence limits are recorded in [the regression matrix](docs/real-design-regression.md); external-spec and host-install limits are recorded in [host compatibility](docs/host-compatibility.md). An unversioned development overlay is not proof of Codex release-format compatibility.
 
 ## Limits and attribution
 
