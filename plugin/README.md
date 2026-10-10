@@ -27,6 +27,12 @@ Only `https://design.penpot.app/mcp/stream` with your `userToken` is accepted. H
 
 Specialists follow `penpot-use`. Inspection/audit stays read-only; edits preserve unrelated work and require read-back and previews for visual verification. Code implementation needs workspace tools. Remote MCP exports cannot write directly to arbitrary local paths.
 
+## Read-only local diagnostic
+
+Run `node scripts/penpot-doctor.mjs` from this directory. Check `node --version` first: Node.js 22+ must be on the host PATH. The command uses existing configuration, including Windows DPAPI, and distinguishes missing/unreadable/damaged/undecryptable configuration from an invalid URL. It makes no network request, prints no credentials and changes nothing. On macOS/Linux it needs the same `PENPOT_MCP_URL` environment as the desktop host.
+
+After local success, verify plugin/skill discovery, bridge startup and official tools in the host. Remote/authentication failures require checking network access and key validity in Penpot Integrations; a no-instance/suspended-tab design error requires waking and connecting the intended file. Successful documentation retrieval proves neither live design access nor a working edit. Retry a read-only design call; do not reinstall or re-enter working credentials.
+
 ## Troubleshooting and attribution
 
 - No tools: check Node.js 22+, your desktop host's PATH and local configuration.

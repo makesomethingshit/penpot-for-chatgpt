@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { createRequire } from 'node:module';
+// Resolve the locked SDK dependency from its owner, including nested npm layouts.
+const { default: Ajv2020 } = createRequire(import.meta.resolve('@modelcontextprotocol/sdk/client/index.js'))('ajv/dist/2020.js');
 import { readFile, readdir, stat } from 'node:fs/promises';
 import { resolve, relative, dirname } from 'node:path';
 
@@ -10,6 +13,12 @@ assert.equal(marketplace.plugins.length, 1);
 assert.equal(marketplace.plugins[0].source.path, './plugin');
 process.chdir('plugin');
 const plugin = await json('plugin.json');
+const ajv = new Ajv2020({ strict: false, allErrors: true });
+for (const [path, schemaName] of [['plugin.json', 'plugin'], ['mcp.json', 'mcp']]) {
+  const schema = JSON.parse(await readFile(new URL(`schemas/${schemaName}.schema.json`, import.meta.url), 'utf8'));
+  const validate = ajv.compile(schema);
+  assert.ok(validate(await json(path)), `${path}: ${ajv.errorsText(validate.errors)}`);
+}
 const legacy = await json('.codex-plugin/plugin.json');
 for (const field of ['name', 'version', 'description', 'author', 'homepage', 'repository', 'keywords']) {
   assert.deepEqual(legacy[field], plugin[field], `Compatibility manifest: ${field}`);
@@ -24,8 +33,28 @@ assert.equal(legacy.mcpServers, './.mcp.json');
 assert.deepEqual(legacy.interface, plugin.extensions['com.openai'].interface);
 if (plugin.version !== undefined) assert.match(plugin.version, /^\d+\.\d+\.\d+$/);
 const ui = legacy.interface;
-assert.ok([...ui.shortDescription].length <= 30);
+for (const field of ['brandColor', 'brandColorDark']) {
+  if (ui[field] !== undefined) assert.match(ui[field], /^#[0-9A-Fa-f]{6}$/);
+}
+for (const [field, limit] of [['displayName', 30], ['shortDescription', 30], ['longDescription', 4000], ['developerName', 80]]) {
+  assert.ok(typeof ui[field] === 'string' && ui[field].trim() && [...ui[field]].length <= limit, `Interface: ${field}`);
+}
+assert.ok(typeof ui.category === 'string' && ui.category.trim());
+assert.ok([...ui.longDescription].length <= 4000);
+if (ui.defaultPrompt !== undefined) {
+  const prompts = typeof ui.defaultPrompt === 'string' ? [ui.defaultPrompt] : ui.defaultPrompt;
+  assert.ok(Array.isArray(prompts) && prompts.length <= 3);
+  assert.ok(prompts.every(prompt => typeof prompt === 'string' && [...prompt].length <= 128));
+  assert.equal(new Set(prompts).size, prompts.length, 'Starter prompts must be unique');
+}
+assert.ok(Array.isArray(ui.capabilities) && ui.capabilities.length <= 20);
+assert.ok(ui.capabilities.every(label => typeof label === 'string' && [...label].length <= 120));
+for (const path of [legacy.skills, legacy.mcpServers]) {
+  assert.ok(!relative(process.cwd(), resolve(path)).startsWith('..'), 'Compatibility path escapes plugin');
+  await stat(path);
+}
 for (const field of ['logo', 'logoDark', 'composerIcon', 'composerIconDark']) {
+  assert.ok(typeof ui[field] === 'string' && ui[field].startsWith('./'), `Icon path: ${field}`);
   const path = resolve(ui[field]);
   assert.ok(!relative(process.cwd(), path).startsWith('..'));
   const image = await readFile(path);
@@ -51,5 +80,6 @@ for (const name of skills) {
     await stat(resolve(dirname(path), match[1]));
   }
 }
-console.log(`Package valid: ${plugin.name} ${plugin.version ?? '(unreleased)'}, ${skills.length} skills.`);
+console.log(`Portable package checks passed: ${plugin.name} ${plugin.version ?? '(unreleased)'}, ${skills.length} skills.`);
+if (legacy.version === undefined) console.log('Unversioned Codex overlay: release-format compatibility is unverified; see docs/host-compatibility.md.');
 process.chdir('..');
