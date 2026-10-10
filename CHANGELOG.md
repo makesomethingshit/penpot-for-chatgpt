@@ -24,3 +24,4 @@ Development changes are unnumbered. The first release will be `0.1.0` at deploym
 - Add read-only local diagnostics reusing the existing URL/DPAPI resolver.
 - Validate portable manifests against external Agent Plugins 1.0.0 schemas and add invalid-package regressions.
 - Record five real-design workflow checks, partial-failure recovery, preservation and host/visual limitations.
+- Record additional Codex fixture evidence, raw HTML duplicate IDs and token-binding retry limitations; require post-recovery read-back and preview.
