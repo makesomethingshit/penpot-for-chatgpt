@@ -1,4 +1,4 @@
-import { open, readFile } from 'node:fs/promises';
+import { open as openConnectionFile, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
@@ -26,7 +26,7 @@ export async function connectionURL(configurationPath = join(homedir(), '.penpot
     } else {
       // Inspect and read the same descriptor; lstat() followed by readFile(path) allows
       // replacement with a symlink between the permission check and the read.
-      const file = await open(configurationPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const file = await openConnectionFile(configurationPath, constants.O_RDONLY | constants.O_NOFOLLOW);
       try {
         const info = await file.stat();
         if (!info.isFile() || (info.mode & 0o077) !== 0 ||
