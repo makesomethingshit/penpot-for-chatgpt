@@ -1,4 +1,5 @@
 import { connectionURL } from './connection.mjs';
+import { fetchWithHeaderDeadline } from './header-deadline.mjs';
 import { createWriteStream } from 'node:fs';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -34,7 +35,10 @@ function resourceLimit() {
 }
 
 async function boundedFetch(input, init) {
-  const response = await fetch(input, { ...init, redirect: 'error' });
+  const options = { ...init, redirect: 'error' };
+  const response = init.method === 'POST'
+    ? await fetchWithHeaderDeadline(fetch, input, options)
+    : await fetch(input, options);
   if (!response.body) return response;
   const sse = response.ok && mediaTypeEssence(response.headers.get('content-type')) === 'text/event-stream';
   let bytes = 0;
@@ -133,10 +137,12 @@ if (url) try {
     if (message.method === 'initialize' && Object.hasOwn(message, 'id')) {
       initializeRequestId = message.id;
     }
-    remote.send(message).catch(() => {
+    remote.send(message).catch(error => {
       if (message.method && Object.hasOwn(message, 'id')) {
         writeOutput(output, serializeMessage({ jsonrpc: '2.0', id: message.id, error: {
-          code: -32000, message: 'Penpot connection failed. Check local configuration and the connected Penpot file.'
+          code: -32000, message: error?.name === 'TimeoutError'
+            ? 'Penpot response headers timed out. Remote outcome unknown; inspect the intended file before retrying.'
+            : 'Penpot connection failed. Check local configuration and the connected Penpot file.'
         } }));
       }
     });

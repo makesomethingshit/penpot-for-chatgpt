@@ -10010,6 +10010,26 @@ var StdioServerTransport = class {
   }
 };
 
+// plugin/server/header-deadline.mjs
+async function fetchWithHeaderDeadline(fetchImpl, input, init, timeoutMs = 18e4) {
+  const controller = new AbortController();
+  const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+  let timer;
+  const expired = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error = new Error("Penpot response headers timed out. Remote outcome unknown; inspect the intended file before retrying.");
+      error.name = "TimeoutError";
+      reject(error);
+      controller.abort();
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([fetchImpl(input, { ...init, signal }), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // plugin/server/bridge-source.mjs
 var MAX_BYTES = 64 * 1024 * 1024;
 var remote;
@@ -10037,7 +10057,8 @@ function resourceLimit() {
   return new Error("Penpot bridge resource limit exceeded");
 }
 async function boundedFetch(input, init) {
-  const response = await fetch(input, { ...init, redirect: "error" });
+  const options = { ...init, redirect: "error" };
+  const response = init.method === "POST" ? await fetchWithHeaderDeadline(fetch, input, options) : await fetch(input, options);
   if (!response.body) return response;
   const sse = response.ok && mediaTypeEssence(response.headers.get("content-type")) === "text/event-stream";
   let bytes = 0;
@@ -10137,11 +10158,11 @@ if (url2) try {
     if (message.method === "initialize" && Object.hasOwn(message, "id")) {
       initializeRequestId = message.id;
     }
-    remote.send(message).catch(() => {
+    remote.send(message).catch((error2) => {
       if (message.method && Object.hasOwn(message, "id")) {
         writeOutput(output, serializeMessage({ jsonrpc: "2.0", id: message.id, error: {
           code: -32e3,
-          message: "Penpot connection failed. Check local configuration and the connected Penpot file."
+          message: error2?.name === "TimeoutError" ? "Penpot response headers timed out. Remote outcome unknown; inspect the intended file before retrying." : "Penpot connection failed. Check local configuration and the connected Penpot file."
         } }));
       }
     });
