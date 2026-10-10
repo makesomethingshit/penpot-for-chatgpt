@@ -83,7 +83,7 @@ printf '%s' "$PENPOT_MCP_URL" | node plugin/scripts/penpot-setup.mjs
 unset PENPOT_MCP_URL
 ```
 
-The setup validates the official endpoint and atomically saves the URL in `~/.penpot-for-chatgpt/connection.json` (0600) under a user-owned directory (0700). This is **local plaintext protected by filesystem permissions**, not macOS Keychain or Linux Secret Service encryption. Backups of the home directory may include it. Never paste the URL into shell arguments, Git or chat. The bridge checks ownership and file permissions before reading it.
+The setup validates the official endpoint and atomically saves the URL in `~/.penpot-for-chatgpt/connection.json` (0600) under a user-owned directory (0700). This is **local plaintext protected by filesystem permissions**, not macOS Keychain or Linux Secret Service encryption. Backups of the home directory may include it. Never paste the URL into shell arguments, Git or chat. The bridge opens the file without following symlinks and checks ownership and mode on that same file descriptor before reading it.
 
 Alternatively, hosts that explicitly forward environment variables can still use `PENPOT_MCP_URL`. For Codex launched from Bash, enter it without placing it in shell history:
 

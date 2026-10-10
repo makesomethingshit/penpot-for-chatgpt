@@ -1,4 +1,5 @@
-import { readFile, lstat } from 'node:fs/promises';
+import { open, readFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -18,16 +19,29 @@ export function validateConnectionURL(value) {
 
 export async function connectionURL(configurationPath = join(homedir(), '.penpot-for-chatgpt', 'connection.json')) {
   if (process.env.PENPOT_MCP_URL !== undefined) return validateConnectionURL(process.env.PENPOT_MCP_URL);
-  // On Unix, a private user-owned file avoids reliance on host-filtered environment variables.
-  if (process.platform !== 'win32') {
-    const fileInfo = await lstat(configurationPath).catch(() => null);
-    if (fileInfo && (!fileInfo.isFile() || (fileInfo.mode & 0o077) !== 0 ||
-        (typeof process.getuid === 'function' && fileInfo.uid !== process.getuid()))) {
+  let text;
+  try {
+    if (process.platform === 'win32') {
+      text = await readFile(configurationPath, 'utf8');
+    } else {
+      // Inspect and read the same descriptor; lstat() followed by readFile(path) allows
+      // replacement with a symlink between the permission check and the read.
+      const file = await open(configurationPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        const info = await file.stat();
+        if (!info.isFile() || (info.mode & 0o077) !== 0 ||
+            (typeof process.getuid === 'function' && info.uid !== process.getuid())) {
+          throw new Error('Unsafe Penpot connection file permissions');
+        }
+        text = await file.readFile('utf8');
+      } finally {
+        await file.close();
+      }
+    }
+  } catch (error) {
+    if (error.code === 'ELOOP' || error.message === 'Unsafe Penpot connection file permissions') {
       throw new Error('Penpot connection file permissions are unsafe. It must be a regular file owned by you with mode 0600.');
     }
-  }
-  let text;
-  try { text = await readFile(configurationPath, 'utf8'); } catch (error) {
     throw new Error(error.code === 'ENOENT'
       ? 'Penpot connection is missing. Run penpot-setup.ps1 on Windows or penpot-setup.mjs on macOS/Linux.'
       : 'Cannot read the Penpot connection file. Check its access permissions.');

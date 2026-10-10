@@ -138,7 +138,8 @@ var require_content_type = __commonJS({
 });
 
 // plugin/server/connection.mjs
-import { readFile, lstat } from "node:fs/promises";
+import { open, readFile } from "node:fs/promises";
+import { constants } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -157,16 +158,26 @@ function validateConnectionURL(value) {
 }
 async function connectionURL(configurationPath = join(homedir(), ".penpot-for-chatgpt", "connection.json")) {
   if (process.env.PENPOT_MCP_URL !== void 0) return validateConnectionURL(process.env.PENPOT_MCP_URL);
-  if (process.platform !== "win32") {
-    const fileInfo = await lstat(configurationPath).catch(() => null);
-    if (fileInfo && (!fileInfo.isFile() || (fileInfo.mode & 63) !== 0 || typeof process.getuid === "function" && fileInfo.uid !== process.getuid())) {
-      throw new Error("Penpot connection file permissions are unsafe. It must be a regular file owned by you with mode 0600.");
-    }
-  }
   let text;
   try {
-    text = await readFile(configurationPath, "utf8");
+    if (process.platform === "win32") {
+      text = await readFile(configurationPath, "utf8");
+    } else {
+      const file = await open(configurationPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      try {
+        const info = await file.stat();
+        if (!info.isFile() || (info.mode & 63) !== 0 || typeof process.getuid === "function" && info.uid !== process.getuid()) {
+          throw new Error("Unsafe Penpot connection file permissions");
+        }
+        text = await file.readFile("utf8");
+      } finally {
+        await file.close();
+      }
+    }
   } catch (error2) {
+    if (error2.code === "ELOOP" || error2.message === "Unsafe Penpot connection file permissions") {
+      throw new Error("Penpot connection file permissions are unsafe. It must be a regular file owned by you with mode 0600.");
+    }
     throw new Error(error2.code === "ENOENT" ? "Penpot connection is missing. Run penpot-setup.ps1 on Windows or penpot-setup.mjs on macOS/Linux." : "Cannot read the Penpot connection file. Check its access permissions.");
   }
   let config2;
