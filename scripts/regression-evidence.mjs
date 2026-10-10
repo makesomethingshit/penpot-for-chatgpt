@@ -1,24 +1,34 @@
 import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 
 export const SKILLS = [
   'penpot-use', 'penpot-generate-design', 'penpot-design-system',
   'penpot-audit', 'penpot-design-to-code'
 ];
 
+const isNonEmptyText = value => typeof value === 'string' && value.trim().length > 0;
+const isFullCommitSha = value => typeof value === 'string' && /^[0-9a-f]{40}$/i.test(value);
+
 export function validateEvidence(record) {
   const errors = [];
-  if (!record || typeof record !== 'object') return ['Evidence must be a JSON object.'];
-  if (!record.host || !record.commit || !record.environment) errors.push('Host, commit and environment are required.');
+  if (!record || typeof record !== 'object' || Array.isArray(record)) return ['Evidence must be a JSON object.'];
+  if (!isNonEmptyText(record.host)) errors.push('Host must be nonempty text.');
+  if (!isFullCommitSha(record.commit)) errors.push('Commit must be a full 40-character SHA.');
+  if (!isNonEmptyText(record.environment)) errors.push('Environment must be nonempty text.');
   for (const name of SKILLS) {
     const item = record.workflows?.[name];
-    if (!item || !['pass', 'fail', 'unverified'].includes(item.status)) {
+    if (!item || typeof item !== 'object' || Array.isArray(item) || !['pass', 'fail', 'unverified'].includes(item.status)) {
       errors.push(name + ': status must be pass/fail/unverified');
       continue;
     }
     if (item.status === 'unverified') continue;
-    if (!item.scope || !item.steps || !item.notes) errors.push(name + ': scope, steps and notes required');
+    if (!isNonEmptyText(item.scope) || !isNonEmptyText(item.steps) || !isNonEmptyText(item.notes)) {
+      errors.push(name + ': scope, steps and notes must be nonempty text');
+    }
     if (item.status === 'fail') continue;
-    if (!item.readBack || !item.visualEvidence) errors.push(name + ': pass needs read-back and visual evidence');
+    if (!isNonEmptyText(item.readBack) || !isNonEmptyText(item.visualEvidence)) {
+      errors.push(name + ': pass needs nonempty read-back and visual evidence');
+    }
     if (item.unrelatedPreserved !== true) errors.push(name + ': pass needs unrelatedPreserved=true');
     if ((name === 'penpot-audit' || name === 'penpot-design-to-code') && item.readOnlyUnchanged !== true) {
       errors.push(name + ': pass needs readOnlyUnchanged=true');
@@ -36,7 +46,7 @@ export function validateEvidence(record) {
   return errors;
 }
 
-if (process.argv[1] && import.meta.url === new URL('file://' + process.argv[1].replaceAll('\\', '/')).href) {
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   try {
     const evidence = JSON.parse(await readFile(process.argv[2], 'utf8'));
     const errors = validateEvidence(evidence);

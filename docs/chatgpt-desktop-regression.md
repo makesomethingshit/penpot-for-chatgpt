@@ -27,6 +27,8 @@ Create a local JSON file (do not commit raw customer content) with keys `host`, 
 - design-system: `bindingPreserved: true`
 - design-to-code: `buildChecked: true`
 
+`host` and `environment` must be nonempty text, and `commit` must be the full 40-character commit SHA. A `pass` or `fail` workflow must provide nonempty text for `scope`, `steps` and `notes`; a `pass` must also provide nonempty text for `readBack` and `visualEvidence`. An `unverified` workflow only requires its status.
+
 Check the structure using `node scripts/regression-evidence.mjs path/to/evidence.json`. It validates evidence **shape**, not its truth. The user/maintainer must inspect actual host logs, artifacts, before/after IDs and screenshots before marking a case passed.
 
 ## Remaining
