@@ -12,6 +12,15 @@ let output;
 let diagnostics;
 let stopping = false;
 let initializeRequestId;
+const pendingRequests = new Map();
+function failPendingRequest(id, message) {
+  if (!pendingRequests.delete(id) || stopping) return;
+  if (initializeRequestId === id) initializeRequestId = undefined;
+  writeOutput(output, serializeMessage({ jsonrpc: '2.0', id,
+    error: { code: -32000, message }
+  }));
+}
+
 async function stop() {
   if (stopping) return;
   stopping = true;
@@ -41,6 +50,17 @@ async function boundedFetch(input, init) {
   let lineBytes = 0;
   let previousCR = false;
   let eventEnded = false;
+  let resumableId = false;
+  let sseIdPrefix = 0;
+  let postRequestIds = [];
+  if (sse && init.method === 'POST' && typeof init.body === 'string') {
+    try {
+      const messages = JSON.parse(init.body);
+      postRequestIds = (Array.isArray(messages) ? messages : [messages])
+        .filter(message => message && message.method && Object.hasOwn(message, 'id'))
+        .map(message => message.id);
+    } catch { /* Never log a sensitive request body. */ }
+  }
   const body = response.body.pipeThrough(new TransformStream({
     transform(chunk, controller) {
       if (chunk.byteLength > MAX_BYTES) throw resourceLimit();
@@ -50,6 +70,14 @@ async function boundedFetch(input, init) {
       } else {
         // Bound unfinished events, not the lifetime of a persistent SSE connection.
         for (const byte of chunk) {
+          if (postRequestIds.length && !resumableId) {
+            // A nonempty SSE id may allow the SDK to resume the interrupted POST.
+            if (byte === 10 || byte === 13) sseIdPrefix = 0;
+            else if (sseIdPrefix === 0) sseIdPrefix = byte === 105 ? 1 : -1;
+            else if (sseIdPrefix === 1) sseIdPrefix = byte === 100 ? 2 : -1;
+            else if (sseIdPrefix === 2) sseIdPrefix = byte === 58 ? 3 : -1;
+            else if (sseIdPrefix === 3 && byte !== 32) resumableId = true;
+          }
           if (previousCR) {
             previousCR = false;
             if (byte === 10) {
@@ -75,7 +103,30 @@ async function boundedFetch(input, init) {
       controller.enqueue(chunk);
     }
   }), { signal: init.signal });
-  return new Response(body, response);
+  if (!postRequestIds.length) return new Response(body, response);
+  // The SDK handles POST SSE asynchronously: send() may resolve before the stream
+  // closes without a JSON-RPC result. Preserve backpressure and do not replay edits.
+  const reader = body.getReader();
+  const checkedBody = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          controller.close();
+          if (!resumableId) setImmediate(() => postRequestIds.forEach(id =>
+            failPendingRequest(id, 'Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.')
+          ));
+        } else controller.enqueue(value);
+      } catch (error) {
+        controller.error(error);
+        if (!resumableId) setImmediate(() => postRequestIds.forEach(id =>
+          failPendingRequest(id, 'Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.')
+        ));
+      }
+    },
+    cancel(reason) { return reader.cancel(reason); }
+  });
+  return new Response(checkedBody, response);
 }
 
 function writeOutput(stream, text) {
@@ -105,6 +156,9 @@ if (url) try {
   output.once('error', () => { process.exitCode = 1; stop(); });
   diagnostics.once('error', () => { process.exitCode = 1; stop(); });
   remote.onmessage = message => {
+    if (Object.hasOwn(message, 'id') && !Object.hasOwn(message, 'method')) {
+      if (!pendingRequests.delete(message.id)) return;
+    }
     // Only the matching initialize response is allowed to negotiate HTTP protocol headers.
     if (initializeRequestId !== undefined && message.id === initializeRequestId) {
       initializeRequestId = undefined;
@@ -130,15 +184,13 @@ if (url) try {
     }
   };
   local.onmessage = message => {
+    const isRequest = Boolean(message.method && Object.hasOwn(message, 'id'));
+    if (isRequest) pendingRequests.set(message.id, true);
     if (message.method === 'initialize' && Object.hasOwn(message, 'id')) {
       initializeRequestId = message.id;
     }
     remote.send(message).catch(() => {
-      if (message.method && Object.hasOwn(message, 'id')) {
-        writeOutput(output, serializeMessage({ jsonrpc: '2.0', id: message.id, error: {
-          code: -32000, message: 'Penpot connection failed. Check local configuration and the connected Penpot file.'
-        } }));
-      }
+      if (isRequest) failPendingRequest(message.id, 'Penpot connection failed. Check local configuration and the connected Penpot file.');
     });
   };
   local.onclose = () => stop();
