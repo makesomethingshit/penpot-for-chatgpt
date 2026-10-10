@@ -78,7 +78,7 @@ For hosts that filter the environment passed to stdio processes, configure a pri
 
 ```bash
 read -r -s -p 'Penpot MCP URL (hidden): ' PENPOT_MCP_URL
-printf '\\n'
+printf '\n'
 printf '%s' "$PENPOT_MCP_URL" | node plugin/scripts/penpot-setup.mjs
 unset PENPOT_MCP_URL
 ```
