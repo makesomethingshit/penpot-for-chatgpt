@@ -10078,7 +10078,7 @@ if (url2) try {
   remote = new StreamableHTTPClientTransport(url2, {
     fetch: boundedFetch
   });
-  local = new StdioServerTransport();
+  local = new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: MAX_BYTES });
   output = process.platform === "win32" ? createWriteStream(null, { fd: 1, autoClose: false }) : process.stdout;
   diagnostics = process.platform === "win32" ? createWriteStream(null, { fd: 2, autoClose: false }) : process.stderr;
   output.once("error", () => {
@@ -10096,7 +10096,11 @@ if (url2) try {
   remote.onerror = () => {
     writeOutput(diagnostics, "Penpot connection error. Check the local MCP URL, key validity, and active Penpot tab.\n");
   };
-  local.onerror = () => writeOutput(diagnostics, "Invalid local MCP message.\n");
+  local.onerror = () => {
+    process.exitCode = 1;
+    writeOutput(diagnostics, "Invalid local MCP message or frame exceeds 64 MiB. Restart the host connection.\n");
+    stop();
+  };
   local.onmessage = (message) => {
     remote.send(message).catch(() => {
       if (message.method && Object.hasOwn(message, "id")) {
