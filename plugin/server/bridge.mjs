@@ -211,6 +211,26 @@ async function connectionURL(configurationPath = join(homedir(), ".penpot-for-ch
   return validateConnectionURL(stdout);
 }
 
+// plugin/server/header-deadline.mjs
+async function fetchWithHeaderDeadline(fetchImpl, input, init, timeoutMs = 18e4) {
+  const controller = new AbortController();
+  const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
+  let timer;
+  const expired = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      const error2 = new Error("Penpot response headers timed out. Remote outcome unknown; inspect the intended file before retrying.");
+      error2.name = "TimeoutError";
+      reject(error2);
+      controller.abort();
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([fetchImpl(input, { ...init, signal }), expired]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // plugin/server/bridge-source.mjs
 import { createWriteStream } from "node:fs";
 
@@ -10009,26 +10029,6 @@ var StdioServerTransport = class {
     });
   }
 };
-
-// plugin/server/header-deadline.mjs
-async function fetchWithHeaderDeadline(fetchImpl, input, init, timeoutMs = 18e4) {
-  const controller = new AbortController();
-  const signal = init.signal ? AbortSignal.any([init.signal, controller.signal]) : controller.signal;
-  let timer;
-  const expired = new Promise((_, reject) => {
-    timer = setTimeout(() => {
-      const error = new Error("Penpot response headers timed out. Remote outcome unknown; inspect the intended file before retrying.");
-      error.name = "TimeoutError";
-      reject(error);
-      controller.abort();
-    }, timeoutMs);
-  });
-  try {
-    return await Promise.race([fetchImpl(input, { ...init, signal }), expired]);
-  } finally {
-    clearTimeout(timer);
-  }
-}
 
 // plugin/server/bridge-source.mjs
 var MAX_BYTES = 64 * 1024 * 1024;
