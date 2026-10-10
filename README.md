@@ -74,7 +74,18 @@ Paste the full URL into its hidden prompt. The script checks Node.js and stores 
 
 ### macOS and Linux
 
-Provide `PENPOT_MCP_URL` in the desktop host's process environment. For Codex launched from Bash, enter it without placing it in shell history:
+For hosts that filter the environment passed to stdio processes, configure a private user-scoped credential file instead (recommended). On macOS/Linux, from the repository directory in Bash:
+
+```bash
+read -r -s -p 'Penpot MCP URL (hidden): ' PENPOT_MCP_URL
+printf '\\n'
+printf '%s' "$PENPOT_MCP_URL" | node plugin/scripts/penpot-setup.mjs
+unset PENPOT_MCP_URL
+```
+
+The setup validates the official endpoint and atomically saves the URL in `~/.penpot-for-chatgpt/connection.json` (0600) under a user-owned directory (0700). This is **local plaintext protected by filesystem permissions**, not macOS Keychain or Linux Secret Service encryption. Backups of the home directory may include it. Never paste the URL into shell arguments, Git or chat. The bridge checks ownership and file permissions before reading it.
+
+Alternatively, hosts that explicitly forward environment variables can still use `PENPOT_MCP_URL`. For Codex launched from Bash, enter it without placing it in shell history:
 
 ```bash
 read -r -s -p 'Penpot MCP URL (hidden): ' PENPOT_MCP_URL
@@ -84,7 +95,7 @@ codex
 unset PENPOT_MCP_URL
 ```
 
-A GUI launched from a terminal may not inherit that environment; use your host's documented environment setup. No macOS/Linux credential-store installer is included.
+A GUI launched from a terminal may not inherit that environment; use your host's documented environment setup. No operating-system keychain integration is included. Use the private file method when the desktop host strips `PENPOT_MCP_URL` from child process environments.
 
 ### First check
 

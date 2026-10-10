@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, lstat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { execFile } from 'node:child_process';
@@ -18,21 +18,32 @@ export function validateConnectionURL(value) {
 
 export async function connectionURL(configurationPath = join(homedir(), '.penpot-for-chatgpt', 'connection.json')) {
   if (process.env.PENPOT_MCP_URL !== undefined) return validateConnectionURL(process.env.PENPOT_MCP_URL);
+  // On Unix, a private user-owned file avoids reliance on host-filtered environment variables.
+  if (process.platform !== 'win32') {
+    const fileInfo = await lstat(configurationPath).catch(() => null);
+    if (fileInfo && (!fileInfo.isFile() || (fileInfo.mode & 0o077) !== 0 ||
+        (typeof process.getuid === 'function' && fileInfo.uid !== process.getuid()))) {
+      throw new Error('Penpot connection file permissions are unsafe. It must be a regular file owned by you with mode 0600.');
+    }
+  }
   let text;
   try { text = await readFile(configurationPath, 'utf8'); } catch (error) {
     throw new Error(error.code === 'ENOENT'
-      ? 'Penpot connection is missing. Run penpot-setup.ps1 on Windows, or set PENPOT_MCP_URL in the host environment.'
+      ? 'Penpot connection is missing. Run penpot-setup.ps1 on Windows or penpot-setup.mjs on macOS/Linux.'
       : 'Cannot read the Penpot connection file. Check its access permissions.');
   }
   let config;
   try { config = JSON.parse(text); } catch {
     throw new Error('Penpot connection file is damaged. Run penpot-setup.ps1 again.');
   }
+  if (process.platform !== 'win32') {
+    if (typeof config?.url !== 'string') {
+      throw new Error('Penpot connection file is damaged. Run penpot-setup.mjs again.');
+    }
+    return validateConnectionURL(config.url);
+  }
   if (typeof config?.dpapi !== 'string' || !config.dpapi) {
     throw new Error('Penpot connection file is damaged. Run penpot-setup.ps1 again.');
-  }
-  if (process.platform !== 'win32') {
-    throw new Error('Windows encrypted credentials cannot be used here. Set PENPOT_MCP_URL in the host environment.');
   }
   const script = '$ErrorActionPreference = "Stop"; $c = Get-Content -LiteralPath $env:PENPOT_CONNECTION_FILE -Raw | ConvertFrom-Json; $s = ConvertTo-SecureString $c.dpapi; [System.Net.NetworkCredential]::new("", $s).Password';
   let stdout;

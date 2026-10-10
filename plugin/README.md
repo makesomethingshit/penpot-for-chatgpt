@@ -9,7 +9,7 @@ Five Penpot design skills with a desktop bridge to the official SaaS MCP server.
 1. Install through your desktop host's supported plugin flow.
 2. Enable **Your account > Integrations > MCP Server** in Penpot and copy the full URL. See the [official guide](https://help.penpot.app/mcp/).
 3. On Windows, run `powershell.exe -NoProfile -File .\scripts\penpot-setup.ps1` from this directory and paste the URL into the hidden prompt. It stores the URL encrypted with DPAPI outside the package, in `%USERPROFILE%\.penpot-for-chatgpt\connection.json`, without a network request.
-4. On macOS/Linux, set `PENPOT_MCP_URL` securely in your desktop host's process environment. No credential-store installer is included.
+4. On macOS/Linux, preferably configure a user-only connection file using `node scripts/penpot-setup.mjs` with the official URL supplied via **stdin**, not a command-line argument. The file is local plaintext protected by mode 0600 under a mode-0700 directory; it is not keychain-encrypted. Alternatively, a host that forwards custom environment variables may use `PENPOT_MCP_URL`. Avoid assuming SDK stdio hosts inherit arbitrary variables.
 5. Open the intended file, choose **File > MCP Server > Connect**, keep the tab awake and reload your desktop MCP connection.
 6. Ask: "Inspect the current Penpot page and list its boards without changing anything."
 

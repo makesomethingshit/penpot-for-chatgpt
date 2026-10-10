@@ -138,7 +138,7 @@ var require_content_type = __commonJS({
 });
 
 // plugin/server/connection.mjs
-import { readFile } from "node:fs/promises";
+import { readFile, lstat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { execFile } from "node:child_process";
@@ -157,11 +157,17 @@ function validateConnectionURL(value) {
 }
 async function connectionURL(configurationPath = join(homedir(), ".penpot-for-chatgpt", "connection.json")) {
   if (process.env.PENPOT_MCP_URL !== void 0) return validateConnectionURL(process.env.PENPOT_MCP_URL);
+  if (process.platform !== "win32") {
+    const fileInfo = await lstat(configurationPath).catch(() => null);
+    if (fileInfo && (!fileInfo.isFile() || (fileInfo.mode & 63) !== 0 || (typeof process.getuid === "function" && fileInfo.uid !== process.getuid()))) {
+      throw new Error("Penpot connection file permissions are unsafe. It must be a regular file owned by you with mode 0600.");
+    }
+  }
   let text;
   try {
     text = await readFile(configurationPath, "utf8");
   } catch (error2) {
-    throw new Error(error2.code === "ENOENT" ? "Penpot connection is missing. Run penpot-setup.ps1 on Windows, or set PENPOT_MCP_URL in the host environment." : "Cannot read the Penpot connection file. Check its access permissions.");
+    throw new Error(error2.code === "ENOENT" ? "Penpot connection is missing. Run penpot-setup.ps1 on Windows or penpot-setup.mjs on macOS/Linux." : "Cannot read the Penpot connection file. Check its access permissions.");
   }
   let config2;
   try {
@@ -169,11 +175,14 @@ async function connectionURL(configurationPath = join(homedir(), ".penpot-for-ch
   } catch {
     throw new Error("Penpot connection file is damaged. Run penpot-setup.ps1 again.");
   }
+  if (process.platform !== "win32") {
+    if (typeof config2?.url !== "string") {
+      throw new Error("Penpot connection file is damaged. Run penpot-setup.mjs again.");
+    }
+    return validateConnectionURL(config2.url);
+  }
   if (typeof config2?.dpapi !== "string" || !config2.dpapi) {
     throw new Error("Penpot connection file is damaged. Run penpot-setup.ps1 again.");
-  }
-  if (process.platform !== "win32") {
-    throw new Error("Windows encrypted credentials cannot be used here. Set PENPOT_MCP_URL in the host environment.");
   }
   const script = '$ErrorActionPreference = "Stop"; $c = Get-Content -LiteralPath $env:PENPOT_CONNECTION_FILE -Raw | ConvertFrom-Json; $s = ConvertTo-SecureString $c.dpapi; [System.Net.NetworkCredential]::new("", $s).Password';
   let stdout;
