@@ -22,6 +22,28 @@ When `sessionId` is exposed, use a user-supplied session ID or a read-only call 
 
 Record the chosen session alongside the file/page/shape IDs, both in the agent's task context and as `storage.penpotTask.sessionId` below. Pass that same `sessionId` to **every** `execute_code` and `export_shape` call that accepts it, including read-back and retries; omit it only from tools whose schema does not support it. If explicit routing cannot be established, do not claim multi-tab isolation.
 
+### Session-routing decision preflight (host-side, read-only)
+
+Apply the following decision to **actual reported session IDs and actual tool schemas**, outside Penpot's `execute_code` sandbox. It is a decision example, not a new MCP tool. Never fabricate a session inventory or assume a single tab from a successful documentation call.
+
+```javascript
+const supportsSessionId = false; // Replace only after checking both live execute_code and export_shape tool schemas.
+const reportedIds = []; // Only IDs explicitly reported by Penpot or chosen by the user; [] means unknown.
+const chosenId = undefined; // Explicit user/session choice when supported.
+if (reportedIds.length > 1 && !supportsSessionId) {
+  throw new Error("Multiple Penpot sessions but no route selector; keep one tab connected before editing.");
+}
+if (supportsSessionId && reportedIds.length > 1 && !chosenId) {
+  throw new Error("Choose the intended Penpot session before editing or exporting.");
+}
+if (chosenId && (!supportsSessionId || (reportedIds.length && !reportedIds.includes(chosenId)))) {
+  throw new Error("The chosen Penpot session is unavailable; do not fall back to another tab.");
+}
+return { sessionId: supportsSessionId ? (chosenId ?? (reportedIds.length === 1 ? reportedIds[0] : undefined)) : undefined };
+```
+
+Only if the final result contains `sessionId`, pass it unchanged to **both** scoped tool calls and exports. Capture it in the existing task context and `storage.penpotTask.sessionId`; recheck the same route at every step. If a later tool says the session disappeared or is ambiguous, fail closed. In an older host without routing support, a different tab with the *same file and page IDs* cannot be distinguished by in-code guards: never claim it is safe solely because those IDs match.
+
 If the pinned session disconnects, disappears, or its storage/file/page guard fails, stop writes and exports. Retry a read-only call to that same ID after restoring its existing connection. Never omit the ID to fall back to another tab. Resume only after the intended session/context is verified; an intentional new target requires explicit re-selection and fresh inspection.
 
 For older remote/host schemas **without `sessionId`**, keep the single active tab fixed, use the same-execution file/page/target guards for all reads and writes, and guard immediately before an explicit-shape export. No extra single-session prompt is needed. This cannot guarantee atomic export routing or distinguish same-file/same-page tabs; stop if tab ownership is ambiguous rather than claiming safety. Restore the existing tab and re-inspect on disconnect. The 2026-10-11 live host exposed only `execute_code({ code })` and `export_shape({ shapeId, format, mode })`; its `user:read` permission was unavailable. Two-tab session isolation remains unverified on that host.
