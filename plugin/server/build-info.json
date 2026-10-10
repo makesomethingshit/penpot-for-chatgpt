@@ -1,6 +1,6 @@
 {
   "runtime": "Node.js >=22",
-  "sdk": "1.31.0",
+  "sdk": "1.32.1",
   "bundler": "0.28.2",
   "build": "npm ci --ignore-scripts && npm run build"
 }
