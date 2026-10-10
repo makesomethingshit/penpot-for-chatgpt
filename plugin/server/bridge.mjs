@@ -9997,6 +9997,7 @@ var local;
 var output;
 var diagnostics;
 var stopping = false;
+var initializeRequestId;
 async function stop() {
   if (stopping) return;
   stopping = true;
@@ -10090,7 +10091,12 @@ if (url2) try {
     stop();
   });
   remote.onmessage = (message) => {
-    if (message.result?.protocolVersion) remote.setProtocolVersion(message.result.protocolVersion);
+    if (initializeRequestId !== void 0 && message.id === initializeRequestId) {
+      initializeRequestId = void 0;
+      if (typeof message.result?.protocolVersion === "string") {
+        remote.setProtocolVersion(message.result.protocolVersion);
+      }
+    }
     writeOutput(output, serializeMessage(message));
   };
   remote.onerror = () => {
@@ -10098,6 +10104,9 @@ if (url2) try {
   };
   local.onerror = () => writeOutput(diagnostics, "Invalid local MCP message.\n");
   local.onmessage = (message) => {
+    if (message.method === "initialize" && Object.hasOwn(message, "id")) {
+      initializeRequestId = message.id;
+    }
     remote.send(message).catch(() => {
       if (message.method && Object.hasOwn(message, "id")) {
         writeOutput(output, serializeMessage({ jsonrpc: "2.0", id: message.id, error: {
