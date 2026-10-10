@@ -138,7 +138,7 @@ var require_content_type = __commonJS({
 });
 
 // plugin/server/connection.mjs
-import { open, readFile } from "node:fs/promises";
+import { open as openConnectionFile, readFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
@@ -163,7 +163,7 @@ async function connectionURL(configurationPath = join(homedir(), ".penpot-for-ch
     if (process.platform === "win32") {
       text = await readFile(configurationPath, "utf8");
     } else {
-      const file = await open(configurationPath, constants.O_RDONLY | constants.O_NOFOLLOW);
+      const file = await openConnectionFile(configurationPath, constants.O_RDONLY | constants.O_NOFOLLOW);
       try {
         const info = await file.stat();
         if (!info.isFile() || (info.mode & 63) !== 0 || typeof process.getuid === "function" && info.uid !== process.getuid()) {
