@@ -27,11 +27,16 @@ globalThis.fetch = async (input, init) => {
     if (init.headers.get('mcp-protocol-version') !== '2025-03-26') throw new Error('Protocol not negotiated');
     if (init.headers.get('mcp-session-id') !== 'test-session') throw new Error('Session not forwarded');
     result = { tools: [{ name: 'export_shape', inputSchema: { type: 'object', properties: {} } }], nextCursor: 'page-2' };
+    if (process.env.PENPOT_TEST_EXTRA_PROTOCOL) result.protocolVersion = '2099-not-negotiated';
   }
-  if (message.method === 'tools/call') result = {
+  if (message.method === 'tools/call') {
+    if (init.headers.get('mcp-protocol-version') !== '2025-03-26')
+      throw new Error('Negotiated protocol header was overwritten by an unrelated tool result');
+    result = {
     content: [{ type: 'image', data: 'aGVsbG8=', mimeType: 'image/png' }],
     structuredContent: { shapeId: message.params.arguments.shapeId }
-  };
+    };
+  }
   const payload = { jsonrpc: '2.0', id: message.id, result };
   const headers = { 'content-type': 'application/json', 'mcp-session-id': 'test-session' };
   if (message.method === 'tools/call') return new Response(
@@ -41,12 +46,12 @@ globalThis.fetch = async (input, init) => {
   return new Response(JSON.stringify(payload), { headers });
 };`;
 
-function bridge(t, url = officialURL, failure = false) {
+function bridge(t, url = officialURL, failure = false, extraProtocol = false) {
   const child = spawn(process.execPath, [
     '--import', `data:text/javascript,${encodeURIComponent(mockFetch)}`,
     process.env.PENPOT_TEST_BRIDGE || 'plugin/server/bridge.mjs'
   ], {
-    env: { ...process.env, PENPOT_MCP_URL: url, PENPOT_TEST_FAILURE: failure ? '1' : '' },
+    env: { ...process.env, PENPOT_MCP_URL: url, PENPOT_TEST_FAILURE: failure ? '1' : '', PENPOT_TEST_EXTRA_PROTOCOL: extraProtocol ? '1' : '' },
     stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true
   });
   t.after(() => child.kill());
@@ -121,4 +126,23 @@ test('reject untrusted endpoints before sending a request', { timeout: 15000 }, 
     assert.match(runtime.stderr(), /Invalid Penpot MCP URL/);
     assert.ok(!runtime.stderr().includes(token));
   }
+});
+
+test('unrelated tool output cannot change the negotiated MCP protocol header', { timeout: 10000 }, async t => {
+  const runtime = bridge(t, officialURL, false, true);
+  const initialized = await runtime.request('initialize', {
+    protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1' }
+  });
+  assert.equal(initialized.result.protocolVersion, '2025-03-26');
+  runtime.child.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\\n');
+  const list = await runtime.request('tools/list', {});
+  assert.equal(list.result.protocolVersion, '2099-not-negotiated');
+  const call = await runtime.request('tools/call', {
+    name: 'export_shape', arguments: { shapeId: 'shape-safe' }
+  });
+  assert.equal(call.result.structuredContent.shapeId, 'shape-safe');
+  const closed = once(runtime.child, 'exit');
+  runtime.child.stdin.end();
+  assert.equal((await closed)[0], 0);
+  assert.equal(runtime.stderr(), '');
 });
