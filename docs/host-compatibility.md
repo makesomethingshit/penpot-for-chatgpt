@@ -24,3 +24,11 @@ The actual installed desktop executable's app-server returned all five enabled s
 A direct SDK smoke check launched the installed MCP manifest's `node`, args and cwd after `${PLUGIN_ROOT}` substitution. Initialization and tool discovery succeeded; all four live SaaS schemas lacked `sessionId`. A read-only `execute_code` via this installed bridge confirmed access to the same fixture file/page. This proves the installed bridge launcher works; automatic plugin MCP startup inside a newly started desktop chat and archive import are not separately exercised.
 
 The bundled bridge was built and its initialization/tool forwarding tested locally; Linux/macOS and final-SHA GitHub CI were not run locally. Both checked-in MCP formats use `node`, `${PLUGIN_ROOT}/server/bridge.mjs` and cwd `${PLUGIN_ROOT}`; no new endpoint, credential, launcher or capabilities are introduced. Issue #4 remains open for the deliberate unversioned overlay limitation and untested archive-import/automatic desktop-MCP lifecycle paths. Local installation, host skill/MCP discovery and installed bridge live access passed.
+
+## Stdio host receive-buffer boundary (SDK 1.32.1)
+
+The bridge supports incoming frames up to 64 MiB and limits its own outgoing queue, but it **cannot raise the desktop host's receiver limit**. The default `StdioClientTransport` reads a maximum 10 MiB frame. `test/stdio-host-receive.test.mjs` launches an actual SDK client with a child emitting 2 MiB / 11 MiB frames: the default receiver must accept the first and reject the second, while an explicitly configured 16 MiB receiver accepts the latter.
+
+This documents an interoperability limit; it does **not** claim the ChatGPT desktop host uses the SDK default. Until the installed host advertises its own receive limit, prefer smaller exports. A host-side buffer overflow should not be called a bridge-side success. The existing 64 MiB inbound/stream safeguards are unchanged.
+
+Pending for #10: capture real ChatGPT desktop receiver behavior (including concurrent normal tool calls) and decide whether a host-supported size negotiation or chunking API exists. Do not invent unsupported MCP chunking or silently truncate images.
