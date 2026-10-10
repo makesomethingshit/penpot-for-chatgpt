@@ -9,3 +9,7 @@ The bridge accepts only the official HTTPS SaaS endpoint and refuses redirects f
 If a key is exposed, regenerate it in Penpot Integrations and update the local configuration. Removing a credential from a file does not remove it from Git history.
 
 Report security issues privately through GitHub's private vulnerability reporting if enabled after publication. If unavailable, contact the maintainer through an established private channel. Do not open a public issue containing credentials or a working exploit.
+
+# Dependency and build checks
+
+CI installs the lockfile with lifecycle scripts disabled, audits dependencies for high or critical advisories, rebuilds the checked-in bridge, and tests Windows and Linux. GitHub Actions are pinned to commit hashes, and checkout credentials are not persisted. Dependabot checks npm dependencies and Actions weekly; review its pull requests and regenerate the bridge for runtime dependency changes.

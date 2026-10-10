@@ -1,6 +1,6 @@
 # Contributing
 
-This repository is currently private and its project source license is undecided. Access to this repository does not establish a public redistribution license. Penpot artwork and bundled dependencies retain their respective rights.
+This repository is public and its project source license is undecided. Access to this repository does not establish a public redistribution license. Penpot artwork and bundled dependencies retain their respective rights.
 
 ## Change and verify
 
