@@ -11,6 +11,7 @@ let local;
 let output;
 let diagnostics;
 let stopping = false;
+let initializeRequestId;
 async function stop() {
   if (stopping) return;
   stopping = true;
@@ -97,21 +98,41 @@ if (url) try {
   remote = new StreamableHTTPClientTransport(url, {
     fetch: boundedFetch
   });
-  local = new StdioServerTransport();
+  local = new StdioServerTransport(process.stdin, process.stdout, { maxBufferSize: MAX_BYTES });
   // Windows stdio pipes block synchronously; POSIX already uses async pipe writes.
   output = process.platform === 'win32' ? createWriteStream(null, { fd: 1, autoClose: false }) : process.stdout;
   diagnostics = process.platform === 'win32' ? createWriteStream(null, { fd: 2, autoClose: false }) : process.stderr;
   output.once('error', () => { process.exitCode = 1; stop(); });
   diagnostics.once('error', () => { process.exitCode = 1; stop(); });
   remote.onmessage = message => {
-    if (message.result?.protocolVersion) remote.setProtocolVersion(message.result.protocolVersion);
+    // Only the matching initialize response is allowed to negotiate HTTP protocol headers.
+    if (initializeRequestId !== undefined && message.id === initializeRequestId) {
+      initializeRequestId = undefined;
+      if (typeof message.result?.protocolVersion === 'string') {
+        remote.setProtocolVersion(message.result.protocolVersion);
+      }
+    }
     writeOutput(output, serializeMessage(message));
   };
   remote.onerror = () => {
     writeOutput(diagnostics, 'Penpot connection error. Check the local MCP URL, key validity, and active Penpot tab.\n');
   };
-  local.onerror = () => writeOutput(diagnostics, 'Invalid local MCP message.\n');
+  local.onerror = () => {
+    if (stopping) return;
+    process.exitCode = 1;
+    writeOutput(diagnostics, 'Invalid local MCP message or frame exceeds 64 MiB. Restart the host connection.\n');
+    stop();
+    process.stdin.destroy();
+    // Close extra Windows pipe writers on a fatal parser error; flush the safe diagnostic first.
+    if (process.platform === 'win32') {
+      output.end();
+      diagnostics.end();
+    }
+  };
   local.onmessage = message => {
+    if (message.method === 'initialize' && Object.hasOwn(message, 'id')) {
+      initializeRequestId = message.id;
+    }
     remote.send(message).catch(() => {
       if (message.method && Object.hasOwn(message, 'id')) {
         writeOutput(output, serializeMessage({ jsonrpc: '2.0', id: message.id, error: {
