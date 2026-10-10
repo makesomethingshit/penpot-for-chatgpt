@@ -159,7 +159,7 @@ async function connectionURL(configurationPath = join(homedir(), ".penpot-for-ch
   if (process.env.PENPOT_MCP_URL !== void 0) return validateConnectionURL(process.env.PENPOT_MCP_URL);
   if (process.platform !== "win32") {
     const fileInfo = await lstat(configurationPath).catch(() => null);
-    if (fileInfo && (!fileInfo.isFile() || (fileInfo.mode & 63) !== 0 || (typeof process.getuid === "function" && fileInfo.uid !== process.getuid()))) {
+    if (fileInfo && (!fileInfo.isFile() || (fileInfo.mode & 63) !== 0 || typeof process.getuid === "function" && fileInfo.uid !== process.getuid())) {
       throw new Error("Penpot connection file permissions are unsafe. It must be a regular file owned by you with mode 0600.");
     }
   }
