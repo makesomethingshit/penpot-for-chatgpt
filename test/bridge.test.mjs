@@ -134,7 +134,7 @@ test('unrelated tool output cannot change the negotiated MCP protocol header', {
     protocolVersion: '2025-03-26', capabilities: {}, clientInfo: { name: 'test', version: '1' }
   });
   assert.equal(initialized.result.protocolVersion, '2025-03-26');
-  runtime.child.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\\n');
+  runtime.child.stdin.write('{"jsonrpc":"2.0","method":"notifications/initialized"}\n');
   const list = await runtime.request('tools/list', {});
   assert.equal(list.result.protocolVersion, '2099-not-negotiated');
   const call = await runtime.request('tools/call', {
