@@ -4,6 +4,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { mediaTypeEssence } from '@modelcontextprotocol/sdk/shared/mediaType.js';
 import { serializeMessage } from '@modelcontextprotocol/sdk/shared/stdio.js';
+import { createParser } from 'eventsource-parser';
 
 const MAX_BYTES = 64 * 1024 * 1024;
 let remote;
@@ -51,7 +52,6 @@ async function boundedFetch(input, init) {
   let previousCR = false;
   let eventEnded = false;
   let resumableId = false;
-  let sseIdPrefix = 0;
   let postRequestIds = [];
   if (sse && init.method === 'POST' && typeof init.body === 'string') {
     try {
@@ -61,6 +61,10 @@ async function boundedFetch(input, init) {
         .map(message => message.id);
     } catch { /* Never log a sensitive request body. */ }
   }
+  const decoder = postRequestIds.length ? new TextDecoder() : undefined;
+  const parser = decoder && createParser({
+    onEvent: event => { if (event.id) resumableId = true; }
+  });
   const body = response.body.pipeThrough(new TransformStream({
     transform(chunk, controller) {
       if (chunk.byteLength > MAX_BYTES) throw resourceLimit();
@@ -70,14 +74,6 @@ async function boundedFetch(input, init) {
       } else {
         // Bound unfinished events, not the lifetime of a persistent SSE connection.
         for (const byte of chunk) {
-          if (postRequestIds.length && !resumableId) {
-            // A nonempty SSE id may allow the SDK to resume the interrupted POST.
-            if (byte === 10 || byte === 13) sseIdPrefix = 0;
-            else if (sseIdPrefix === 0) sseIdPrefix = byte === 105 ? 1 : -1;
-            else if (sseIdPrefix === 1) sseIdPrefix = byte === 100 ? 2 : -1;
-            else if (sseIdPrefix === 2) sseIdPrefix = byte === 58 ? 3 : -1;
-            else if (sseIdPrefix === 3 && byte !== 32) resumableId = true;
-          }
           if (previousCR) {
             previousCR = false;
             if (byte === 10) {
@@ -100,6 +96,7 @@ async function boundedFetch(input, init) {
           previousCR = byte === 13;
         }
       }
+      if (parser) parser.feed(decoder.decode(chunk, { stream: true }));
       controller.enqueue(chunk);
     }
   }), { signal: init.signal });

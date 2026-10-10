@@ -25,7 +25,13 @@ globalThis.fetch = async (_, init) => {
   } else if (mode === 'duplicate') {
     stream = ('event: message\\ndata: ' + payload + '\\n\\n').repeat(2);
   } else if (mode === 'resumable') {
+    stream = 'id: evt-1\\ndata: {"jsonrpc":"2.0","method":"notifications/message","params":{"level":"info"}}\\n\\n';
+  } else if (mode === 'id-only') {
     stream = 'id: evt-1\\n\\n';
+  } else if (mode === 'empty-id') {
+    stream = 'id:\\ndata: ping\\n\\n';
+  } else if (mode === 'nul-id') {
+    stream = 'id: bad\\0id\\ndata: ping\\n\\n';
   } else if (mode === 'error') {
     stream = new ReadableStream({ start(controller) {
       controller.enqueue(new TextEncoder().encode('event: ping\\n\\n'));
@@ -69,7 +75,7 @@ function fixture(t) {
   };
 }
 
-for (const mode of ['empty', 'error']) {
+for (const mode of ['empty', 'error', 'id-only', 'empty-id', 'nul-id']) {
   test('non-resumable POST SSE ' + mode + ' returns one sanitized unknown-outcome failure', { timeout: 15000 }, async t => {
     const f = fixture(t);
     const response = await f.call(mode);
@@ -96,13 +102,11 @@ for (const mode of ['valid', 'duplicate']) {
   });
 }
 
-test('SSE stream with resumption id does not generate an early synthetic error', { timeout: 15000 }, async t => {
+test('SSE id and data priming does not generate an early synthetic error', { timeout: 15000 }, async t => {
   const f = fixture(t);
-  f.child.stdin.write(JSON.stringify({
-    jsonrpc: '2.0', id: 6, method: 'tools/call',
-    params: { name: 'synthetic', arguments: { mode: 'resumable' } }
-  }) + '\n');
-  await new Promise(resolve => setTimeout(resolve, 150));
-  assert.equal(f.responses.length, 0);
+  const response = await f.call('resumable', 9);
+  assert.equal(response.method, 'notifications/message');
+  await new Promise(resolve => setTimeout(resolve, 50));
+  assert.equal(f.responses.length, 1);
   await f.finish();
 });

@@ -10055,7 +10055,6 @@ async function boundedFetch(input, init) {
   let previousCR = false;
   let eventEnded = false;
   let resumableId = false;
-  let sseIdPrefix = 0;
   let postRequestIds = [];
   if (sse && init.method === "POST" && typeof init.body === "string") {
     try {
@@ -10064,6 +10063,12 @@ async function boundedFetch(input, init) {
     } catch {
     }
   }
+  const decoder = postRequestIds.length ? new TextDecoder() : void 0;
+  const parser = decoder && createParser({
+    onEvent: (event) => {
+      if (event.id) resumableId = true;
+    }
+  });
   const body = response.body.pipeThrough(new TransformStream({
     transform(chunk, controller) {
       if (chunk.byteLength > MAX_BYTES) throw resourceLimit();
@@ -10072,13 +10077,6 @@ async function boundedFetch(input, init) {
         if (bytes > MAX_BYTES) throw resourceLimit();
       } else {
         for (const byte of chunk) {
-          if (postRequestIds.length && !resumableId) {
-            if (byte === 10 || byte === 13) sseIdPrefix = 0;
-            else if (sseIdPrefix === 0) sseIdPrefix = byte === 105 ? 1 : -1;
-            else if (sseIdPrefix === 1) sseIdPrefix = byte === 100 ? 2 : -1;
-            else if (sseIdPrefix === 2) sseIdPrefix = byte === 58 ? 3 : -1;
-            else if (sseIdPrefix === 3 && byte !== 32) resumableId = true;
-          }
           if (previousCR) {
             previousCR = false;
             if (byte === 10) {
@@ -10101,6 +10099,7 @@ async function boundedFetch(input, init) {
           previousCR = byte === 13;
         }
       }
+      if (parser) parser.feed(decoder.decode(chunk, { stream: true }));
       controller.enqueue(chunk);
     }
   }), { signal: init.signal });
