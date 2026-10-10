@@ -24,39 +24,75 @@ Creating assets does not synchronize the application or all existing screens. Fo
 
 ## Read-only catalog example
 
-This inspects catalog metadata without creating assets or changing the pinned task. Use a narrower subset if the catalog is large.
+This inspects **bounded** catalog metadata without creating assets or changing the pinned task. The initial result returns IDs, names, counts and activation, not every token in every set. Keep the file/page pinned; the library is file-scoped. For later batches, use the same guarded query with explicit set/component offsets. Use the targeted token example below only for an explicitly resolved set; never claim full-catalog inspection based on the first batch.
 
 ```javascript
-if (!penpot.currentFile || !penpot.currentPage) {
-  throw new Error("Open a Penpot file and connect MCP.");
+const task = storage.penpotTask;
+if (!task || penpot.currentFile?.id !== task.fileId ||
+    penpot.currentPage?.id !== task.pageId) {
+  throw new Error("Penpot context changed; inspect the intended target again.");
 }
 const library = penpot.library.local;
+const setOffset = 0; // Increase only while reading the same pinned task.
+const componentOffset = 0;
+const setLimit = 20;
+const componentLimit = 50;
+const sets = library.tokens.sets;
+const components = library.components;
 return {
-  fileId: penpot.currentFile.id,
-  pageId: penpot.currentPage.id,
+  fileId: task.fileId,
+  pageId: task.pageId,
   libraryId: library.id,
-  sets: library.tokens.sets.map(set => ({
-    id: set.id, name: set.name, active: set.active,
-    tokens: set.tokens.map(token => ({
-      id: token.id, name: token.name, type: token.type,
-      value: token.value, resolved: token.resolvedValueString
-    }))
+  sets: sets.slice(setOffset, setOffset + setLimit).map(set => ({
+    id: set.id, name: set.name, active: set.active, tokenCount: set.tokens.length
   })),
-  components: library.components.map(component => ({
+  setTotal: sets.length,
+  nextSetOffset: setOffset + setLimit < sets.length ? setOffset + setLimit : null,
+  components: components.slice(componentOffset, componentOffset + componentLimit).map(component => ({
     id: component.id, name: component.name, path: component.path
-  }))
+  })),
+  componentTotal: components.length,
+  nextComponentOffset: componentOffset + componentLimit < components.length
+    ? componentOffset + componentLimit : null
+};
+```
+
+## Read one resolved set's tokens in bounded batches
+
+After identifying an existing set ID in the inventory, replace `requestedSetId` with that **verified ID**. Advance `offset` only within the same pinned task. This includes raw aliases and resolved values but does not activate or write tokens.
+
+```javascript
+const task = storage.penpotTask;
+if (!task || penpot.currentFile?.id !== task.fileId ||
+    penpot.currentPage?.id !== task.pageId) {
+  throw new Error("Penpot context changed; inspect the intended target again.");
+}
+const requestedSetId = "REPLACE_WITH_EXISTING_SET_ID";
+const offset = 0;
+const limit = 50;
+const set = penpot.library.local.tokens.getSetById(requestedSetId);
+if (!set) throw new Error("The requested token set is missing.");
+return {
+  setId: set.id,
+  setName: set.name,
+  tokens: set.tokens.slice(offset, offset + limit).map(token => ({
+    id: token.id, name: token.name, type: token.type,
+    value: token.value, resolved: token.resolvedValueString
+  })),
+  total: set.tokens.length,
+  nextOffset: offset + limit < set.tokens.length ? offset + limit : null
 };
 ```
 
 ## Add missing scalar tokens to a resolved set
 
-After source mapping and target resolution, store the authorized batch as `storage.penpotTokenPlan = { setId, tokens }`. Each token has a documented `type`, `name` and raw string `value`; this small example supports literal `color` and `spacing` tokens. Use the live type-specific API and verify dependencies separately for aliases or composite tokens. Do not run demo values against a user's library.
+After source mapping and target resolution, store the authorized batch **inside the current task** as `storage.penpotTask.tokenPlan = { setId, tokens }`. Each token has a documented `type`, `name` and raw string `value`; this small example supports literal `color` and `spacing` tokens. Use the live type-specific API and verify dependencies separately for aliases or composite tokens. Do not run demo values against a user's library.
 
 The example requires the pinned file/page from `penpot-use`, checks the entire batch for conflicts before writing, and reuses identical existing tokens on retry. It neither activates a set nor applies tokens to shapes.
 
 ```javascript
 const task = storage.penpotTask;
-const plan = storage.penpotTokenPlan;
+const plan = task?.tokenPlan;
 if (!task || penpot.currentFile?.id !== task.fileId ||
     penpot.currentPage?.id !== task.pageId) {
   throw new Error("Penpot context changed; inspect the intended target again.");
@@ -90,7 +126,7 @@ for (const input of plan.tokens) {
 return { setId: set.id, active: set.active, tokens: result };
 ```
 
-An API failure can leave a partially created batch; inspect that state before retrying. Preflight is not a transaction. After creation, reread the catalog and compare raw/resolved values with the source mapping. A token present in an inactive set is not evidence of an applied design change.
+An API failure can leave a partially created batch; inspect that state before retrying **within this same pinned task**. Preflight is not a transaction. After successful completion, delete only `storage.penpotTask.tokenPlan`; after cancellation or task completion, clearing `storage.penpotTask` also discards its plan. Never reuse any legacy `storage.penpotTokenPlan` from an earlier task. After creation, reread the catalog and compare raw/resolved values with the source mapping. A token present in an inactive set is not evidence of an applied design change.
 
 If the user switches file/page during recovery, return to the recorded target, confirm the same IDs and inspect its partial state before resuming. Do not replace the pinned task with the focused page to bypass the guard. A requested change of destination needs a newly resolved plan rather than replaying the old batch there.
 
