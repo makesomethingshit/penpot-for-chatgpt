@@ -111,9 +111,16 @@ if (url) try {
     writeOutput(diagnostics, 'Penpot connection error. Check the local MCP URL, key validity, and active Penpot tab.\n');
   };
   local.onerror = () => {
+    if (stopping) return;
     process.exitCode = 1;
     writeOutput(diagnostics, 'Invalid local MCP message or frame exceeds 64 MiB. Restart the host connection.\n');
     stop();
+    process.stdin.destroy();
+    // Close extra Windows pipe writers on a fatal parser error; flush the safe diagnostic first.
+    if (process.platform === 'win32') {
+      output.end();
+      diagnostics.end();
+    }
   };
   local.onmessage = message => {
     remote.send(message).catch(() => {
