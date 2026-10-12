@@ -14,13 +14,14 @@ let diagnostics;
 let stopping = false;
 let initializeRequestId;
 const pendingRequests = new Map();
-function retirePendingRequest(id) {
+function retirePendingRequest(id, owner) {
+  if (owner && pendingRequests.get(id) !== owner) return false;
   const retired = pendingRequests.delete(id);
   if (retired && initializeRequestId === id) initializeRequestId = undefined;
   return retired;
 }
-function failPendingRequest(id, message) {
-  if (!retirePendingRequest(id) || stopping) return;
+function failPendingRequest(id, message, owner) {
+  if (!owner || pendingRequests.get(id) !== owner || !retirePendingRequest(id, owner) || stopping) return;
   writeOutput(output, serializeMessage({ jsonrpc: '2.0', id,
     error: { code: -32000, message }
   }));
@@ -50,6 +51,15 @@ function resourceLimit() {
 }
 
 async function boundedFetch(input, init) {
+  let postRequestIds = [];
+  if (init.method === 'POST' && typeof init.body === 'string') {
+    try {
+      const messages = JSON.parse(init.body);
+      postRequestIds = (Array.isArray(messages) ? messages : [messages])
+        .filter(message => message && typeof message.method === 'string' && Object.hasOwn(message, 'id'))
+        .map(message => ({ id: message.id, owner: pendingRequests.get(message.id) }));
+    } catch { /* Never log a sensitive request body. */ }
+  }
   const response = await fetch(input, { ...init, redirect: 'error' });
   if (!response.body) return response;
   const sse = response.ok && mediaTypeEssence(response.headers.get('content-type')) === 'text/event-stream';
@@ -58,15 +68,7 @@ async function boundedFetch(input, init) {
   let previousCR = false;
   let eventEnded = false;
   let resumableId = false;
-  let postRequestIds = [];
-  if (sse && init.method === 'POST' && typeof init.body === 'string') {
-    try {
-      const messages = JSON.parse(init.body);
-      postRequestIds = (Array.isArray(messages) ? messages : [messages])
-        .filter(message => message && message.method && Object.hasOwn(message, 'id'))
-        .map(message => message.id);
-    } catch { /* Never log a sensitive request body. */ }
-  }
+  if (!sse) postRequestIds = [];
   const decoder = postRequestIds.length ? new TextDecoder() : undefined;
   const parser = decoder && createParser({
     onEvent: event => { if (event.id) resumableId = true; }
@@ -116,14 +118,14 @@ async function boundedFetch(input, init) {
         const { value, done } = await reader.read();
         if (done) {
           controller.close();
-          if (!resumableId) setImmediate(() => postRequestIds.forEach(id =>
-            failPendingRequest(id, 'Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.')
+          if (!resumableId) setImmediate(() => postRequestIds.forEach(({ id, owner }) =>
+            failPendingRequest(id, 'Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.', owner)
           ));
         } else controller.enqueue(value);
       } catch (error) {
         controller.error(error);
-        if (!resumableId) setImmediate(() => postRequestIds.forEach(id =>
-          failPendingRequest(id, 'Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.')
+        if (!resumableId) setImmediate(() => postRequestIds.forEach(({ id, owner }) =>
+          failPendingRequest(id, 'Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.', owner)
         ));
       }
     },
@@ -189,13 +191,14 @@ if (url) try {
   local.onmessage = message => {
     const isCancellation = message.method === 'notifications/cancelled';
     if (isCancellation) retirePendingRequest(message.params?.requestId);
-    const isRequest = !isCancellation && Boolean(message.method && Object.hasOwn(message, 'id'));
-    if (isRequest) pendingRequests.set(message.id, true);
+    const isRequest = !isCancellation && typeof message.method === 'string' && Object.hasOwn(message, 'id');
+    const owner = isRequest ? {} : undefined;
+    if (isRequest) pendingRequests.set(message.id, owner);
     if (message.method === 'initialize' && Object.hasOwn(message, 'id')) {
       initializeRequestId = message.id;
     }
     remote.send(message).catch(() => {
-      if (isRequest) failPendingRequest(message.id, 'Penpot connection failed. Remote outcome unknown; inspect the intended file before retrying.');
+      if (isRequest) failPendingRequest(message.id, 'Penpot connection failed. Remote outcome unknown; inspect the intended file before retrying.', owner);
     });
   };
   local.onclose = () => stop();
