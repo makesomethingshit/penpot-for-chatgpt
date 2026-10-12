@@ -171,3 +171,67 @@ test('reconnect policy replaces stale pins only after confirmation of the intend
   assert.match(doc, /recovery inspection on the new route, verify its file\/page\/target/);
   assert.match(doc, /If those IDs differ, stop/);
 });
+
+
+test('mixed selector host keeps execute route while allowing only a confirmed-singleton export', () => {
+  const route = {
+    executeCodeSupports: true, exportShapeSupports: false,
+    invokedTools: ['execute_code', 'export_shape'],
+    inventoryKnown: false, reported: [], chosen: 'pinned-session',
+    confirmedOneConnectedTab: true
+  };
+  const exec = preflight(route);
+  assert.deepEqual(exec.selectors.execute_code, { sessionId: 'pinned-session' });
+  assert.deepEqual(exec.downgradedTools, ['export_shape']);
+  const exportResult = preflight({
+    ...route, currentInvokedTool: 'export_shape', currentOperation: 'export'
+  });
+  assert.deepEqual(exportResult.selectors.execute_code, { sessionId: 'pinned-session' });
+  assert.deepEqual(exportResult.downgradedTools, ['export_shape']);
+  assert.throws(() => preflight({
+    ...route, confirmedOneConnectedTab: false, currentInvokedTool: 'export_shape', currentOperation: 'export'
+  }), /does not expose session routing/);
+  assert.throws(() => preflight({
+    ...route, inventoryKnown: true, reported: ['other-session'],
+    currentInvokedTool: 'export_shape', currentOperation: 'export'
+  }), /unavailable/);
+});
+
+const restoreBlock = doc.split('### Restore the task pin after a plugin reload')[1]
+  ?.match(new RegExp(String.fromCharCode(96).repeat(3) + 'javascript\\n([\\s\\S]*?)\\n' + String.fromCharCode(96).repeat(3)))?.[1];
+assert.ok(restoreBlock, 'reload recovery must have executable guarded storage restoration');
+function recoverTask(original, sessionId, { file = 'file-a', page = 'page-a', ids = ['target-a'], state = {} } = {}) {
+  const script = restoreBlock
+    .replace(/const originalTask = \{[\s\S]*?\n\};/,
+      'const originalTask = ' + JSON.stringify(original) + ';')
+    .replace("const confirmedSessionId = 'REPLACE_CONFIRMED_SESSION_ID';",
+      'const confirmedSessionId = ' + JSON.stringify(sessionId) + ';');
+  const penpot = { currentFile: { id: file }, currentPage: { id: page, root: {} }, selection: [{ id: 'unrelated-selection' }] };
+  const penpotUtils = { findShape: predicate => ids.map(id => ({ id })).find(predicate) };
+  const result = new Function('penpot', 'penpotUtils', 'storage', script)(penpot, penpotUtils, state);
+  return { result, state };
+}
+
+test('reload restores the full original file/page/target pin, not a fresh selection', () => {
+  const original = { fileId: 'file-a', pageId: 'page-a', targetIds: ['target-a'] };
+  const { result, state } = recoverTask(original, 'new-session');
+  assert.equal(result.restored, true);
+  assert.deepEqual(state.penpotTask, {
+    fileId: 'file-a', pageId: 'page-a', targetIds: ['target-a'], sessionId: 'new-session'
+  });
+  assert.equal(state.penpotTaskSelection, undefined);
+});
+
+test('reload recovery refuses changed file/page, missing targets, missing saved IDs and existing tasks', () => {
+  const original = { fileId: 'file-a', pageId: 'page-a', targetIds: ['target-a'] };
+  const state = {};
+  assert.throws(() => recoverTask(original, 'new-session', { file: 'other-file', state }), /does not match/);
+  assert.throws(() => recoverTask(original, 'new-session', { page: 'other-page', state }), /does not match/);
+  assert.throws(() => recoverTask(original, 'new-session', { ids: ['other-target'], state }), /missing/);
+  assert.throws(() => recoverTask(undefined, 'new-session', { state }), /existing task/);
+  assert.throws(() => recoverTask(original, undefined, { state }), /confirmed Penpot route/);
+  assert.deepEqual(state, {});
+  const existing = { penpotTask: { fileId: 'other-file' } };
+  assert.throws(() => recoverTask(original, 'new-session', { state: existing }), /already pinned/);
+  assert.deepEqual(existing.penpotTask, { fileId: 'other-file' });
+});
