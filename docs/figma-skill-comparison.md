@@ -101,6 +101,6 @@ Judgments: **equivalent** = same policy outcome, **partial** = overlapping polic
 - [x] Read-only scope, original/neighbor/component/token preservation, recovery and evidence boundaries are compared.
 - [x] Editable-screen omission and stale #1 closure prose are fixed; routing limitation is tracked in existing #5/#30.
 - [x] Real replay remains NOT RUN; comparison never enters `regression-evidence.mjs` as a pass.
-- [ ] Publish final head and verify Windows/Ubuntu Node 22 CI; then update #29 body to `Closes #1` under the revised method.
+Publication gate: the PR body records the exact published head and Windows/Ubuntu Node 22 CI. Revised #1 can close only when those checks pass; this source comparison does not itself certify CI or live execution.
 
 Source comparison can satisfy the revised issue; it cannot guarantee actual write/export/recovery behavior, host session routing, receiver limits or visual parity. The live desktop protocol and validator remain separate.
