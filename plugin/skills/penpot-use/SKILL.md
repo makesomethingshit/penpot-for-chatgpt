@@ -18,13 +18,13 @@ Apply this workflow before every Penpot task. This desktop package includes a lo
 
 Read the actual input schemas; do not invent a session-list tool. In upstream Penpot's multi-session API, `execute_code` and `export_shape` accept optional `sessionId`. `high_level_overview` takes no session argument and `penpot_api_info` takes `type` and optional `member`: these return server documentation, not a target design. See the [upstream tool schema](https://github.com/penpot/penpot/blob/10955f17e27943429a10e90360d0404e3f56e27c/mcp/packages/server/src/Tool.ts) and [multi-file workflow](https://github.com/penpot/penpot/blob/10955f17e27943429a10e90360d0404e3f56e27c/mcp/README.md#working-with-multiple-files). Upstream development support does not prove that the connected SaaS or host exposes it.
 
-When `sessionId` is exposed, use a user-supplied session ID or a read-only call to discover the server's ambiguity response. Check `execute_code` and `export_shape` independently: a selector in one tool's schema does not imply a selector in the other, and complete workflow routing is supported only when both expose it. With several connected sessions, have the user select one of the reported IDs; do not guess from order, file names or recent focus. With exactly one, the server can auto-select it without a routine prompt; obtain its short ID from the supported plugin UI when available and retain it in the task context. Do not use a transport `Mcp-Session-Id` header or the user's authentication token as the Penpot tab ID. Do not request `user:read` or change permissions just to obtain an ID.
+When `sessionId` is exposed, use a user-supplied session ID or a read-only call to discover the server's ambiguity response. Check `execute_code` and `export_shape` independently, and require selector support only for the tools this task will actually invoke: a selector in one tool's schema does not imply a selector in the other. With several connected sessions, have the user select one of the reported IDs; do not guess from order, file names or recent focus. With exactly one reported session, use it without a routine prompt. If the supported tools expose no inventory, an initial read-only discovery may let the server auto-select a single session; stop if the server reports ambiguity or no active session, and establish a reported or explicitly selected route before later work. Do not use a transport `Mcp-Session-Id` header or the user's authentication token as the Penpot tab ID. Do not request `user:read` or change permissions just to obtain an ID.
 
-Record the chosen session alongside the file/page/shape IDs, both in the agent's task context and as `storage.penpotTask.sessionId` below. Pass that same `sessionId` to **every** `execute_code` and `export_shape` call whose own schema accepts it, including read-back and retries; omit it only from tools whose schema does not support it. If both tools are needed but only one accepts the selector, treat complete explicit routing as unavailable and do not claim multi-tab isolation.
+Record the chosen session alongside the file/page/shape IDs, both in the agent's task context and as `storage.penpotTask.sessionId` below. Pass that same `sessionId` to **every** call of an invoked tool whose own schema accepts it, including read-back and retries; omit it only from tools whose schema does not support it. If an invoked tool lacks the selector, treat routing for that operation as unavailable and do not claim multi-tab isolation; an unused tool's limitation does not block an inspect/edit task that never invokes it.
 
 If the pinned session disconnects, disappears, or its storage/file/page guard fails, stop writes and exports. Retry a read-only call to that same ID after restoring its existing connection. Never omit the ID to fall back to another tab. Resume only after the intended session/context is verified; an intentional new target requires explicit re-selection and fresh inspection.
 
-For older remote/host schemas **without `sessionId`**, keep the single active tab fixed, use the same-execution file/page/target guards for all reads and writes, and guard immediately before an explicit-shape export. No extra single-session prompt is needed. This cannot guarantee atomic export routing or distinguish same-file/same-page tabs; stop if tab ownership is ambiguous rather than claiming safety. Restore the existing tab and re-inspect on disconnect. The 2026-10-11 live host exposed only `execute_code({ code })` and `export_shape({ shapeId, format, mode })`; its `user:read` permission was unavailable. Two-tab session isolation remains unverified on that host.
+For older remote/host schemas **without `sessionId` on an invoked tool**, keep the single active tab fixed, use the same-execution file/page/target guards for all reads and writes, and guard immediately before an explicit-shape export. A known singleton needs no routine prompt; unknown inventory requires explicit confirmation that exactly one tab is connected before proceeding. After an active or pinned connection is interrupted, a remaining tab count of one or matching file/page IDs does not prove continuity: stop until the user confirms the intended target, explicitly reselects it and a fresh read-only inspection verifies it. This cannot guarantee atomic export routing or distinguish same-file/same-page tabs; stop if tab ownership is ambiguous rather than claiming safety. Restore the existing tab and re-inspect on disconnect. The 2026-10-11 live host exposed only `execute_code({ code })` and `export_shape({ shapeId, format, mode })`; its `user:read` permission was unavailable. Two-tab session isolation remains unverified on that host.
 
 A read-only starting example, after reading the live overview. Resolve explicitly requested IDs in the intended page before this call and put them in `requestedIds`; leave it empty only when the request uses the captured selection. Set `fullPageInventory` to `true` for an explicitly requested page-wide listing **even when another board is selected**. This initialization runs once per task. After completing a task (or an explicit re-selection), clear only `storage.penpotTask` and `storage.penpotTaskSelection`; do not clear unrelated storage or silently reset during work:
 
@@ -83,31 +83,57 @@ For creation, guard the same file/page IDs and resolve the planned destination c
 Apply the following decision to **actual reported session IDs and actual tool schemas**, outside Penpot's `execute_code` sandbox. It is a decision example, not a new MCP tool. Never fabricate a session inventory or assume a single tab from a successful documentation call.
 
 ```javascript
+const usesExecuteCode = true; // Set from the reads, writes or inspections this task will actually invoke.
+const usesExportShape = false; // Set true only when this task will export.
 const executeCodeSupportsSessionId = false; // Replace only after checking the live execute_code schema.
 const exportShapeSupportsSessionId = false; // Replace only after checking the live export_shape schema.
-const supportsSessionId = executeCodeSupportsSessionId && exportShapeSupportsSessionId;
-const reportedIds = []; // Only IDs explicitly reported by Penpot or chosen by the user; [] means unknown.
+const supportsUsedToolRouting =
+  (!usesExecuteCode || executeCodeSupportsSessionId) &&
+  (!usesExportShape || exportShapeSupportsSessionId);
+const sessionInventoryKnown = false; // false = unavailable; true + [] = known empty.
+const reportedIds = []; // Only IDs explicitly reported by Penpot or chosen by the user.
 const chosenId = undefined; // Explicit user/session choice when supported.
+const readOnlyDiscovery = false; // Only an initial, read-only server auto-selection may use unknown supported inventory.
 const confirmedOneConnectedTab = false; // Set true only after an explicit confirmation that exactly one tab is connected.
-if (supportsSessionId && reportedIds.length === 0) {
-  throw new Error("No Penpot sessions are reported; re-establish the intended route before editing or exporting.");
+const interruptedAfterPinnedSession = false; // Set after the active or pinned connection is interrupted.
+const intendedTargetConfirmed = false; // The user confirms the remaining/reconnected tab is intended.
+const reselectedAfterInterruption = false; // The intended target was explicitly selected again.
+const reinspectedAfterInterruption = false; // A fresh read-only call verified file/page/target after re-selection.
+if (sessionInventoryKnown && reportedIds.length === 0) {
+  throw new Error("No Penpot sessions are connected; re-establish the intended route before editing or exporting.");
 }
-if (!supportsSessionId && reportedIds.length === 0 && !confirmedOneConnectedTab) {
+if (interruptedAfterPinnedSession &&
+    (!intendedTargetConfirmed || !reselectedAfterInterruption || !reinspectedAfterInterruption)) {
+  throw new Error("The Penpot route was interrupted; confirm, reselect and re-inspect the intended target before resuming.");
+}
+if (chosenId && !supportsUsedToolRouting) {
+  throw new Error("The intended Penpot tool does not expose session routing; do not claim explicit isolation.");
+}
+if (!sessionInventoryKnown && chosenId && supportsUsedToolRouting) {
+  // A user-supplied ID is explicit even when the host has no inventory listing.
+} else if (!sessionInventoryKnown && readOnlyDiscovery && supportsUsedToolRouting) {
+  // Let the server auto-select for this initial read-only ambiguity check.
+} else if (!sessionInventoryKnown && !supportsUsedToolRouting && confirmedOneConnectedTab) {
+  // A legacy host can proceed only after the user confirms its single active tab.
+} else if (!sessionInventoryKnown) {
   throw new Error("Penpot session inventory is unknown; explicitly confirm exactly one connected tab before editing or exporting.");
 }
-if (reportedIds.length > 1 && !supportsSessionId) {
+if (reportedIds.length > 1 && !supportsUsedToolRouting) {
   throw new Error("Multiple Penpot sessions but no route selector; keep one tab connected before editing.");
 }
-if (supportsSessionId && reportedIds.length > 1 && !chosenId) {
+if (supportsUsedToolRouting && reportedIds.length > 1 && !chosenId) {
   throw new Error("Choose the intended Penpot session before editing or exporting.");
 }
-if (chosenId && (!supportsSessionId || (reportedIds.length && !reportedIds.includes(chosenId)))) {
+if (chosenId && (sessionInventoryKnown && !reportedIds.includes(chosenId))) {
   throw new Error("The chosen Penpot session is unavailable; do not fall back to another tab.");
 }
-return { sessionId: supportsSessionId ? (chosenId ?? (reportedIds.length === 1 ? reportedIds[0] : undefined)) : undefined };
+return {
+  sessionId: supportsUsedToolRouting ? (chosenId ?? (reportedIds.length === 1 ? reportedIds[0] : undefined)) : undefined,
+  autoSelectedReadOnly: !sessionInventoryKnown && readOnlyDiscovery && supportsUsedToolRouting
+};
 ```
 
-Only if the final result contains `sessionId`, pass it unchanged to **both** scoped tool calls and exports. Capture it in the existing task context and `storage.penpotTask.sessionId`; recheck the same route at every step. If a later tool says the session disappeared or is ambiguous, fail closed. In an older host without routing support, a different tab with the *same file and page IDs* cannot be distinguished by in-code guards: never claim it is safe solely because those IDs match.
+Only if the final result contains `sessionId`, pass it unchanged to every invoked scoped tool whose schema accepts it, including exports. Capture it in the existing task context and `storage.penpotTask.sessionId`; recheck the same route at every step. If a later tool says the session disappeared or is ambiguous, fail closed. In an older host without routing support, a different tab with the *same file and page IDs* cannot be distinguished by in-code guards: never claim it is safe solely because those IDs match, and require the interruption recovery checks above before resuming.
 
 ## Inspect before deciding
 
