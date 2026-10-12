@@ -42,9 +42,11 @@ globalThis.fetch = async (_, init) => {
       queueMicrotask(() => controller.error(new Error('synthetic stream failure')));
     }
   }), { headers: { 'content-type': 'text/event-stream' } });
-  if (mode === 'cancel') return new Response(new ReadableStream({
+  if (mode === 'cancel') {
+    let timer;
+    return new Response(new ReadableStream({
     start(controller) {
-      setTimeout(() => {
+      timer = setTimeout(() => {
         controller.enqueue(encode('event: message\\ndata: ' + JSON.stringify({
           jsonrpc: '2.0', id: message.id,
           result: { content: [{ type: 'text', text: 'late-' + message.id }] }
@@ -55,8 +57,10 @@ globalThis.fetch = async (_, init) => {
         }) + '\\n\\n'));
         controller.close();
       }, 80);
-    }
+    },
+    cancel() { clearTimeout(timer); }
   }), { headers: { 'content-type': 'text/event-stream' } });
+  }
   if (mode === 'healthy') return new Promise(resolve => setTimeout(() =>
     resolve(response(message, { value: 'healthy' })), 100));
   if (mode === 'shutdown') return new Promise((_, reject) => {

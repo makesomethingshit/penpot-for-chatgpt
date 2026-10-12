@@ -76,3 +76,17 @@ test('empty string method forwards exactly one terminal error',{timeout:15000},a
  const f=runtime(t,'empty');await f.ready();f.send(3,'',{});await f.wait(()=>f.messages.some(m=>m.id===3));
  await new Promise(r=>setTimeout(r,50));assert.deepEqual(f.messages.filter(m=>m.id===3),[{jsonrpc:'2.0',id:3,error:{code:-32601,message:'Method not found'}}]);await f.close();
 });
+
+for(const mode of ['post','resumed']) test('cancelled resumable '+mode+' stops owned reconnects and preserves unrelated GET',{timeout:15000},async t=>{
+ const f=runtime(t,mode);await f.ready();f.send(5,'tools/call',{mode:'cancel'});
+ await f.wait(()=>f.messages.some(m=>m.params?.data==='primed'));
+ if(mode==='resumed') await f.wait(()=>f.stderr().includes('resumed'));
+ f.send(undefined,'notifications/cancelled',{requestId:5});
+ await f.wait(()=>f.stderr().includes(mode==='post'?'post-aborted':'get-aborted'));
+ await new Promise(r=>setTimeout(r,120));f.send(6,'tools/call',{mode:'healthy'});
+ await f.wait(()=>f.messages.some(m=>m.id===6));
+ assert.deepEqual(f.messages.find(m=>m.id===6).result,{posts:1,resumes:mode==='post'?0:1,value:'healthy'});
+ assert.equal(f.messages.some(m=>m.id===5),false);
+ await f.wait(()=>f.messages.some(m=>m.params?.data==='unrelated-get'));
+ await f.close();
+});
