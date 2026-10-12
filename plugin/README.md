@@ -29,7 +29,7 @@ Specialists follow `penpot-use`. Inspection/audit stays read-only; edits preserv
 
 ## Read-only local diagnostic
 
-Run `node scripts/penpot-doctor.mjs` from this directory. Check `node --version` first: Node.js 22+ must be on the host PATH. The command uses existing configuration, including Windows DPAPI, and distinguishes missing/unreadable/damaged/undecryptable configuration from an invalid URL. It makes no network request, prints no credentials and changes nothing. On macOS/Linux it needs the same `PENPOT_MCP_URL` environment as the desktop host.
+Run `node scripts/penpot-doctor.mjs` from this directory. Check `node --version` first: Node.js 22+ must be on the host PATH. The command uses existing configuration, including Windows DPAPI, and distinguishes missing/unreadable/damaged/undecryptable configuration from an invalid URL. It makes no network request, prints no credentials and changes nothing. On macOS/Linux it reads the existing private user file or `PENPOT_MCP_URL`; set the variable in this process only if using the environment-override method. A successful terminal diagnostic does not prove the GUI host passed custom variables.
 
 After local success, verify plugin/skill discovery, bridge startup and official tools in the host. Remote/authentication failures require checking network access and key validity in Penpot Integrations; a no-instance/suspended-tab design error requires waking and connecting the intended file. Successful documentation retrieval proves neither live design access nor a working edit. Retry a read-only design call; do not reinstall or re-enter working credentials.
 
