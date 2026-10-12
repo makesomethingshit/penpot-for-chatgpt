@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { createParser } from 'eventsource-parser';
 import { connectionURL } from './connection.mjs';
 import { fetchWithHeaderDeadline } from './header-deadline.mjs';
@@ -15,14 +16,18 @@ let diagnostics;
 let stopping = false;
 let initializeRequestId;
 const requestOwners = new Map();
-function failPendingRequest(id, message) {
+// SDK stream readers and reconnect timers inherit the send context. Initial GETs
+// stay transport-owned; only GET resumption belongs to the original POST.
+const requestContext = new AsyncLocalStorage();
+function failPendingRequest(id, message, owner) {
+  if (requestOwners.get(id) !== owner) return;
   if (!requestOwners.delete(id) || stopping) return;
   if (initializeRequestId === id) initializeRequestId = undefined;
   writeOutput(output, serializeMessage({ jsonrpc: '2.0', id, error: { code: -32000, message } }));
 }
 
 function requestIdOfMessage(message) {
-  return message && !Array.isArray(message) && message.method && Object.hasOwn(message, 'id') && message.id !== undefined
+  return message && !Array.isArray(message) && typeof message.method === 'string' && Object.hasOwn(message, 'id') && message.id !== undefined
     ? message.id : undefined;
 }
 
@@ -61,7 +66,11 @@ function resourceLimit() {
 
 async function boundedFetch(input, init) {
   const requestId = init.method === 'POST' ? requestIdOfBody(init.body) : undefined;
-  const owner = requestId === undefined ? undefined : requestOwners.get(requestId);
+  const resuming = init.method === 'GET' && new Headers(init.headers).has('last-event-id');
+  const owner = requestId === undefined ? (resuming ? requestContext.getStore() : undefined) : requestContext.getStore();
+  // Complete this cancelled SDK resume locally, without opening a remote stream
+  // or rejecting (which would cause another SDK retry). Other GETs stay intact.
+  if (resuming && owner?.cancelled) return new Response(null, { status: 405 });
   const options = {
     ...init,
     signal: combinedSignal(init.signal, owner?.controller.signal),
@@ -85,8 +94,8 @@ async function boundedFetch(input, init) {
     try {
       const messages = JSON.parse(init.body);
       postRequestIds = (Array.isArray(messages) ? messages : [messages])
-        .filter(message => message && message.method && Object.hasOwn(message, 'id'))
-        .map(message => message.id);
+        .filter(message => message && typeof message.method === 'string' && Object.hasOwn(message, 'id'))
+        .map(message => ({ id: message.id, owner }));
     } catch { /* Never log a sensitive request body. */ }
   }
   const decoder = postRequestIds.length ? new TextDecoder() : undefined;
@@ -138,14 +147,14 @@ async function boundedFetch(input, init) {
         const { value, done } = await reader.read();
         if (done) {
           controller.close();
-          if (!resumableId) setImmediate(() => postRequestIds.forEach(id =>
-            failPendingRequest(id, 'Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.')
+          if (!resumableId) setImmediate(() => postRequestIds.forEach(({ id, owner }) =>
+            failPendingRequest(id, 'Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.', owner)
           ));
         } else controller.enqueue(value);
       } catch (error) {
         controller.error(error);
-        if (!resumableId) setImmediate(() => postRequestIds.forEach(id =>
-          failPendingRequest(id, 'Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.')
+        if (!resumableId) setImmediate(() => postRequestIds.forEach(({ id, owner }) =>
+          failPendingRequest(id, 'Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.', owner)
         ));
       }
     },
@@ -226,12 +235,12 @@ if (url) try {
     if (message.method === 'initialize' && Object.hasOwn(message, 'id')) {
       initializeRequestId = message.id;
     }
-    remote.send(message).catch(error => {
+    requestContext.run(requestOwner, () => remote.send(message)).catch(error => {
       const currentOwner = requestId === undefined ? undefined : requestOwners.get(requestId);
       if (requestOwner && currentOwner === requestOwner && !requestOwner.cancelled) {
         requestOwners.delete(requestId);
       }
-      if (message.method && Object.hasOwn(message, 'id')) {
+      if (typeof message.method === 'string' && Object.hasOwn(message, 'id')) {
         if (!requestOwner || currentOwner !== requestOwner || requestOwner.cancelled || stopping) return;
         writeOutput(output, serializeMessage({ jsonrpc: '2.0', id: message.id, error: {
           code: -32000, message: error?.name === 'TimeoutError'

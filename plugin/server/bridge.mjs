@@ -137,6 +137,9 @@ var require_content_type = __commonJS({
   }
 });
 
+// plugin/server/bridge-source.mjs
+import { AsyncLocalStorage } from "node:async_hooks";
+
 // node_modules/eventsource-parser/dist/index.js
 var ParseError = class extends Error {
   constructor(message, options) {
@@ -10039,13 +10042,15 @@ var diagnostics;
 var stopping = false;
 var initializeRequestId;
 var requestOwners = /* @__PURE__ */ new Map();
-function failPendingRequest(id, message) {
+var requestContext = new AsyncLocalStorage();
+function failPendingRequest(id, message, owner) {
+  if (requestOwners.get(id) !== owner) return;
   if (!requestOwners.delete(id) || stopping) return;
   if (initializeRequestId === id) initializeRequestId = void 0;
   writeOutput(output, serializeMessage({ jsonrpc: "2.0", id, error: { code: -32e3, message } }));
 }
 function requestIdOfMessage(message) {
-  return message && !Array.isArray(message) && message.method && Object.hasOwn(message, "id") && message.id !== void 0 ? message.id : void 0;
+  return message && !Array.isArray(message) && typeof message.method === "string" && Object.hasOwn(message, "id") && message.id !== void 0 ? message.id : void 0;
 }
 function requestIdOfBody(body) {
   if (typeof body !== "string") return;
@@ -10081,7 +10086,9 @@ function resourceLimit() {
 }
 async function boundedFetch(input, init) {
   const requestId = init.method === "POST" ? requestIdOfBody(init.body) : void 0;
-  const owner = requestId === void 0 ? void 0 : requestOwners.get(requestId);
+  const resuming = init.method === "GET" && new Headers(init.headers).has("last-event-id");
+  const owner = requestId === void 0 ? resuming ? requestContext.getStore() : void 0 : requestContext.getStore();
+  if (resuming && owner?.cancelled) return new Response(null, { status: 405 });
   const options = {
     ...init,
     signal: combinedSignal(init.signal, owner?.controller.signal),
@@ -10102,7 +10109,7 @@ async function boundedFetch(input, init) {
   if (sse && init.method === "POST" && typeof init.body === "string") {
     try {
       const messages = JSON.parse(init.body);
-      postRequestIds = (Array.isArray(messages) ? messages : [messages]).filter((message) => message && message.method && Object.hasOwn(message, "id")).map((message) => message.id);
+      postRequestIds = (Array.isArray(messages) ? messages : [messages]).filter((message) => message && typeof message.method === "string" && Object.hasOwn(message, "id")).map((message) => ({ id: message.id, owner }));
     } catch {
     }
   }
@@ -10155,13 +10162,13 @@ async function boundedFetch(input, init) {
         if (done) {
           controller.close();
           if (!resumableId) setImmediate(() => postRequestIds.forEach(
-            (id) => failPendingRequest(id, "Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.")
+            ({ id, owner: owner2 }) => failPendingRequest(id, "Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.", owner2)
           ));
         } else controller.enqueue(value);
       } catch (error2) {
         controller.error(error2);
         if (!resumableId) setImmediate(() => postRequestIds.forEach(
-          (id) => failPendingRequest(id, "Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.")
+          ({ id, owner: owner2 }) => failPendingRequest(id, "Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.", owner2)
         ));
       }
     },
@@ -10246,12 +10253,12 @@ if (url2) try {
     if (message.method === "initialize" && Object.hasOwn(message, "id")) {
       initializeRequestId = message.id;
     }
-    remote.send(message).catch((error2) => {
+    requestContext.run(requestOwner, () => remote.send(message)).catch((error2) => {
       const currentOwner = requestId === void 0 ? void 0 : requestOwners.get(requestId);
       if (requestOwner && currentOwner === requestOwner && !requestOwner.cancelled) {
         requestOwners.delete(requestId);
       }
-      if (message.method && Object.hasOwn(message, "id")) {
+      if (typeof message.method === "string" && Object.hasOwn(message, "id")) {
         if (!requestOwner || currentOwner !== requestOwner || requestOwner.cancelled || stopping) return;
         writeOutput(output, serializeMessage({ jsonrpc: "2.0", id: message.id, error: {
           code: -32e3,
