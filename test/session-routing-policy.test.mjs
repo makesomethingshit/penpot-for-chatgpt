@@ -8,8 +8,9 @@ assert.ok(block, 'host-side preflight must remain executable');
 function preflight({
   executeCodeSupports = false,
   exportShapeSupports = false,
-  usesExecuteCode = true,
-  usesExportShape = false,
+  invokedTools = ['execute_code'],
+  currentInvokedTool = 'execute_code',
+  currentOperation = 'read',
   inventoryKnown = false,
   reported = [],
   chosen,
@@ -21,8 +22,9 @@ function preflight({
   reinspected = false
 } = {}) {
   const script = block
-    .replace('const usesExecuteCode = true;', 'const usesExecuteCode = ' + JSON.stringify(usesExecuteCode) + ';')
-    .replace('const usesExportShape = false;', 'const usesExportShape = ' + JSON.stringify(usesExportShape) + ';')
+    .replace('const invokedTools = ["execute_code"];', 'const invokedTools = ' + JSON.stringify(invokedTools) + ';')
+    .replace('const currentInvokedTool = "execute_code";', 'const currentInvokedTool = ' + JSON.stringify(currentInvokedTool) + ';')
+    .replace('const currentOperation = "read";', 'const currentOperation = ' + JSON.stringify(currentOperation) + ';')
     .replace('const executeCodeSupportsSessionId = false;', 'const executeCodeSupportsSessionId = ' + JSON.stringify(executeCodeSupports) + ';')
     .replace('const exportShapeSupportsSessionId = false;', 'const exportShapeSupportsSessionId = ' + JSON.stringify(exportShapeSupports) + ';')
     .replace('const sessionInventoryKnown = false;', 'const sessionInventoryKnown = ' + JSON.stringify(inventoryKnown) + ';')
@@ -38,7 +40,11 @@ function preflight({
 }
 
 test('single tab stays automatic when both scoped tools support route selection', () => {
-  assert.equal(preflight({ executeCodeSupports: true, exportShapeSupports: true, inventoryKnown: true, reported: ['session-a'] }).sessionId, 'session-a');
+  assert.deepEqual(preflight({ executeCodeSupports: true, exportShapeSupports: true, invokedTools: ['execute_code', 'export_shape'], inventoryKnown: true, reported: ['session-a'] }).selectors, {
+    execute_code: { sessionId: 'session-a' },
+    export_shape: { sessionId: 'session-a' }
+  });
+  assert.equal(preflight({ executeCodeSupports: true, exportShapeSupports: true, invokedTools: ['execute_code'], inventoryKnown: true, reported: ['session-a'], chosen: 'session-a' }).selectors.execute_code.sessionId, 'session-a');
 });
 
 test('multiple sessions fail closed without a routing selector or explicit choice', () => {
@@ -47,14 +53,18 @@ test('multiple sessions fail closed without a routing selector or explicit choic
 });
 
 test('selector support is required only for the tools this task invokes', () => {
-  assert.equal(preflight({ executeCodeSupports: true, exportShapeSupports: false, inventoryKnown: true, reported: ['session-a', 'session-b'], chosen: 'session-b' }).sessionId, 'session-b');
-  assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: false, usesExportShape: true, inventoryKnown: true, reported: ['session-a', 'session-b'], chosen: 'session-b' }), /does not expose session routing/);
+  const result = preflight({ executeCodeSupports: true, exportShapeSupports: false, invokedTools: ['execute_code', 'export_shape'], inventoryKnown: true, reported: ['session-a', 'session-b'], chosen: 'session-b' });
+  assert.deepEqual(result.selectors, { execute_code: { sessionId: 'session-b' } });
+  assert.deepEqual(result.unsupportedTools, ['export_shape']);
+  assert.deepEqual(result.downgradedTools, []);
+  assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: false, currentInvokedTool: 'export_shape', currentOperation: 'export', invokedTools: ['execute_code', 'export_shape'], inventoryKnown: true, reported: ['session-a', 'session-b'], chosen: 'session-b' }), /does not expose session routing/);
+  assert.deepEqual(preflight({ executeCodeSupports: true, exportShapeSupports: false, currentInvokedTool: 'export_shape', currentOperation: 'export', invokedTools: ['export_shape'], inventoryKnown: true, reported: ['session-a'] }).downgradedTools, ['export_shape']);
 });
 
 test('a pinned session is retained; missing session never silently falls back to another', () => {
-  assert.equal(preflight({ executeCodeSupports: true, exportShapeSupports: true, inventoryKnown: true, reported: ['session-a', 'session-b'], chosen: 'session-b' }).sessionId, 'session-b');
+  assert.equal(preflight({ executeCodeSupports: true, exportShapeSupports: true, inventoryKnown: true, reported: ['session-a', 'session-b'], chosen: 'session-b' }).selectors.execute_code.sessionId, 'session-b');
   assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true, inventoryKnown: true, reported: ['session-a'], chosen: 'session-b' }), /unavailable/);
-  assert.throws(() => preflight({ inventoryKnown: true, reported: ['session-a'], chosen: 'session-a' }), /does not expose session routing/);
+  assert.deepEqual(preflight({ inventoryKnown: true, reported: ['session-a'], chosen: 'session-a' }).downgradedTools, ['execute_code']);
 });
 
 test('unknown inventory is distinct from known empty and permits initial supported read-only discovery', () => {
@@ -70,23 +80,55 @@ test('a pinned supported route fails closed when disconnect leaves zero reported
 
 test('a remaining B cannot replace disconnected pinned A, even with the same file and page', () => {
   assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true, inventoryKnown: true, reported: ['session-b'], chosen: 'session-a' }), /unavailable/);
-  assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true, inventoryKnown: true, reported: ['session-b'], chosen: 'session-a', interrupted: true }), /confirm, reselect and re-inspect/);
+  assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true, inventoryKnown: true, reported: ['session-b'], chosen: 'session-a', interrupted: true }), /unavailable/);
   assert.throws(() => preflight({ inventoryKnown: false, confirmedOneConnectedTab: true, interrupted: true }), /confirm, reselect and re-inspect/);
   assert.match(doc, /same file and page IDs.*cannot be distinguished/);
 });
 
 test('interrupted legacy routing resumes only after intended-target confirmation and fresh reinspection', () => {
   const recovery = { confirmedOneConnectedTab: true, interrupted: true, intendedTargetConfirmed: true, reselected: true, reinspected: true };
-  assert.equal(preflight(recovery).sessionId, undefined);
+  assert.equal(preflight(recovery).selectors.execute_code, undefined);
   for (const missing of ['intendedTargetConfirmed', 'reselected', 'reinspected']) {
     assert.throws(() => preflight({ ...recovery, [missing]: false }), /confirm, reselect and re-inspect/);
   }
 });
 
+test('supported recovery read may establish verification, but supported writes and exports remain blocked until then', () => {
+  const recovery = {
+    executeCodeSupports: true,
+    exportShapeSupports: true,
+    inventoryKnown: true,
+    reported: ['session-a'],
+    chosen: 'session-a',
+    readOnlyDiscovery: true,
+    interrupted: true,
+    intendedTargetConfirmed: true,
+    reselected: true
+  };
+  assert.equal(preflight(recovery).recoveryPendingVerification, true);
+  assert.throws(() => preflight({ ...recovery, currentOperation: 'write' }), /readOnlyDiscovery is allowed only/);
+  assert.throws(() => preflight({ ...recovery, currentInvokedTool: 'export_shape', currentOperation: 'export', invokedTools: ['execute_code', 'export_shape'] }), /readOnlyDiscovery is allowed only/);
+  assert.equal(preflight({ ...recovery, reinspected: true, readOnlyDiscovery: false, currentOperation: 'write' }).selectors.execute_code.sessionId, 'session-a');
+});
+
+test('legacy recovery read may establish verification, but legacy writes and exports remain blocked until then', () => {
+  const recovery = {
+    confirmedOneConnectedTab: true,
+    interrupted: true,
+    intendedTargetConfirmed: true,
+    reselected: true,
+    readOnlyDiscovery: true
+  };
+  assert.equal(preflight(recovery).recoveryPendingVerification, true);
+  assert.throws(() => preflight({ ...recovery, currentOperation: 'write' }), /readOnlyDiscovery is allowed only/);
+  assert.throws(() => preflight({ ...recovery, currentInvokedTool: 'export_shape', currentOperation: 'export', invokedTools: ['export_shape'] }), /readOnlyDiscovery is allowed only/);
+  assert.deepEqual(preflight({ ...recovery, reinspected: true, readOnlyDiscovery: false, currentOperation: 'write' }).downgradedTools, ['execute_code']);
+});
+
 test('legacy unknown inventory requires explicit one-connected-tab confirmation', () => {
   assert.throws(() => preflight({}), /explicitly confirm exactly one connected tab/);
-  assert.equal(preflight({ confirmedOneConnectedTab: true }).sessionId, undefined);
-  assert.equal(preflight({ inventoryKnown: true, reported: ['session-a'] }).sessionId, undefined);
+  assert.equal(preflight({ confirmedOneConnectedTab: true }).selectors.execute_code, undefined);
+  assert.deepEqual(preflight({ inventoryKnown: true, reported: ['session-a'] }).downgradedTools, ['execute_code']);
 });
 
 test('identical file and page IDs pass the context guard but do not prove legacy session continuity', () => {

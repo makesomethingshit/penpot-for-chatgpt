@@ -11,12 +11,14 @@ This is a **pending live-host test**, not evidence that current ChatGPT desktop 
 
 | Mode | Expected | Evidence state |
 | --- | --- | --- |
-| One known tab, with `sessionId` exposed by every invoked scoped tool | Existing task works without prompting | Unverified on ChatGPT desktop |
+| One known tab, with `sessionId` exposed by every invoked scoped tool | Existing task works without prompting; retain one selector per supported operation | Unverified on ChatGPT desktop |
 | Initial unknown inventory, supported invoked tools, read-only discovery | Allow server auto-selection only for the discovery call; stop on ambiguity/no session | Documented policy; live behavior unverified |
+| Multi-operation with partial selector support | Keep the selector for each supported operation; reject or downgrade unsupported export independently | Documented policy |
 | Two tabs and exposed IDs | User-selected ID persists through read/write/export | Unverified |
 | Supported routing with known zero IDs | Stop, including when a previously pinned ID exists | Documented fail-closed policy |
 | Supported routing with unknown inventory | Require an explicit ID or an initial read-only discovery; do not treat `[]` as known empty | Documented policy |
 | Chosen session disappears | Mutation and export must stop | Unverified |
+| Interrupted route recovery read | After confirmation and re-selection, allow one read-only `execute_code` inspection with pending verification; keep mutation/export blocked until a fresh inspection is verified | Documented fail-closed policy |
 | Legacy host with unknown inventory | Require explicit one-connected-tab confirmation; after interruption also require intended-target confirmation, re-selection and re-inspection | Documented fail-closed policy |
 | Two tabs, no selector exposed | Do not authorize ambiguous write/export | Documented fail-closed policy |
 | Two tabs same file/page | Must not infer session from identical file/page IDs | Unverified |
