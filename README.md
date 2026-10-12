@@ -107,7 +107,7 @@ Run this read-only local diagnostic from the repository:
 npm run doctor
 ```
 
-From an extracted plugin directory, use `node scripts/penpot-doctor.mjs`. It uses the same credential resolver as the bridge (including Windows DPAPI), changes no configuration, prints no URL/token/design data, and makes **no network request**. On macOS/Linux, run it in the same environment as the host with `PENPOT_MCP_URL` configured. A terminal check does not prove the GUI inherited that environment or successfully launched the bridge. If `node` itself is missing, install Node.js 22+ and verify the host PATH before this command can run.
+From an extracted plugin directory, use `node scripts/penpot-doctor.mjs`. It uses the same credential resolver as the bridge (including Windows DPAPI), changes no configuration, prints no URL/token/design data, and makes **no network request**. On macOS/Linux it reads the existing private user file or `PENPOT_MCP_URL`; set the variable only when using the environment-override method. A filtering GUI host can use the private credential file without that variable. A terminal check does not prove the GUI inherited that environment or successfully launched the bridge. If `node` itself is missing, install Node.js 22+ and verify the host PATH before this command can run.
 
 Local success is not remote authentication or live-file success. In the host: a generic connection error means network/remote/authentication still needs checking; verify connectivity and key validity in Penpot Integrations without pasting credentials. A design-call error saying no instance is connected or the tab is suspended means wake/connect the intended existing tab, then retry read-only. Do not replace valid credentials to hide a disconnected design.
 
@@ -123,7 +123,7 @@ The bridge forwards official tool schemas, responses, pagination and images. It 
 | --- | --- |
 | No tools | Node.js 22+ on the app's PATH, local credentials, and MCP startup. |
 | Authentication fails | Your URL/key in Penpot Integrations; update the local configuration. |
-| Connection is missing | Run the Windows setup script or set `PENPOT_MCP_URL` in the host environment. |
+| Connection is missing | Run the Windows setup script, or on macOS/Linux supply the URL via stdin to `node plugin/scripts/penpot-setup.mjs` for the private credential-file fallback. Use `PENPOT_MCP_URL` only when the host explicitly forwards it. |
 | Connection file is damaged | Run setup again to replace the invalid file. |
 | Cannot decrypt the connection | Run setup as the Windows user that runs the desktop host. |
 | Invalid MCP URL | Copy the full official URL; use exactly one non-empty `userToken`. |

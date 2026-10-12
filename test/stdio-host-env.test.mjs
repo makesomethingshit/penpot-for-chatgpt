@@ -75,6 +75,7 @@ async function bundledBridge(t, { home, url }) {
   const pending = new Map();
   let id = 0;
   let stderr = '';
+  let stdout = '';
   transport.stderr.on('data', chunk => { stderr += chunk.toString(); });
   transport.onmessage = message => {
     messages.push(message);
@@ -97,12 +98,15 @@ async function bundledBridge(t, { home, url }) {
     pending.clear();
   };
   await transport.start();
+  // Pinned SDK test fixture: observe the actual pipe before parser errors truncate it.
+  transport._process.stdout.on('data', chunk => { stdout += chunk.toString(); });
   t.after(() => transport.close());
   return {
     transport,
     messages,
     errors,
     stderr: () => stderr,
+    stdout: () => stdout,
     closed,
     request(method, params = {}) {
       const requestId = ++id;
@@ -113,8 +117,10 @@ async function bundledBridge(t, { home, url }) {
 }
 
 function assertNoSecretOutput(runtime) {
-  assert.ok(!runtime.stderr().includes(secret));
-  assert.ok(!JSON.stringify(runtime.messages).includes(secret));
+  assert.ok(!runtime.stderr().includes(secret), 'credential in stderr');
+  assert.ok(!(runtime.stdout?.() ?? '').includes(secret), 'credential in raw stdout');
+  assert.ok(!JSON.stringify(runtime.messages).includes(secret), 'credential in messages');
+  assert.ok(!(runtime.errors ?? []).map(String).join('\n').includes(secret), 'credential in parser errors');
 }
 
 test('SDK default host filters PENPOT_MCP_URL in the spawned stdio server', {
@@ -214,4 +220,22 @@ test('POSIX filtered host rejects missing, unsafe-mode and symlink credentials s
       assertNoSecretOutput(runtime);
     });
   }
+});
+
+
+test('secret assertion detects a plain stdout credential captured by the SDK parser', { timeout: 15000 }, async t => {
+  const transport = new StdioClientTransport({
+    command: process.execPath, args: ['-e', "process.stdout.write('" + secret + "\\n')"], stderr: 'pipe'
+  });
+  const errors = [];
+  let stdout = '';
+  const closed = new Promise(resolve => { transport.onclose = resolve; });
+  transport.onerror = error => errors.push(error);
+  await transport.start();
+  transport._process.stdout.on('data', chunk => { stdout += chunk; });
+  t.after(() => transport.close());
+  await closed;
+  assert.ok(errors.length, 'plain stdout is rejected by the actual SDK parser');
+  assert.ok(stdout.includes(secret), 'raw child output retains the full leaked credential');
+  assert.throws(() => assertNoSecretOutput({ stderr: () => '', stdout: () => stdout, messages: [], errors }), /credential/);
 });
