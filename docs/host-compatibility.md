@@ -1,6 +1,6 @@
 # Host compatibility evidence
 
-Checked 2026-10-11. Target formats: Agent Plugins 1.0.0 portable manifests and the existing Codex compatibility overlay. No release/version change is included.
+Checked 2026-10-12. Target formats: Agent Plugins 1.0.0 portable manifests and the existing Codex compatibility overlay. No release/version change is included.
 
 `npm run check` now compiles the externally published JSON Schemas for portable `plugin.json` and `mcp.json`, using the already locked SDK dependency Ajv 8.20.0 resolved from the SDK package (including nested npm layouts). Offline schema snapshots are unchanged downloads from:
 
@@ -27,8 +27,8 @@ The bundled bridge was built and its initialization/tool forwarding tested local
 
 ## Host-filtered custom variables on POSIX
 
-`test/stdio-host-env.test.mjs` launches a real pinned `StdioClientTransport` child, verifying that `getDefaultEnvironment()` strips `PENPOT_MCP_URL` even when the parent has it; an explicit `env` override forwards it. This is the **default JS SDK client behavior**, not a claim about every desktop host.
+`test/stdio-host-env.test.mjs` launches a real pinned `StdioClientTransport` child, verifying that `getDefaultEnvironment()` strips `PENPOT_MCP_URL` even when the parent has it; an explicit `env` override forwards it. On POSIX, the same file launches the actual bundled bridge with the filtered environment, reads a synthetic URL from a private `HOME` credential file, and uses a mock HTTP transport to verify initialization plus the SDK's GET reconnect. Missing files, unsafe modes and symlinks fail before startup, with no credential in stdout or stderr. These POSIX integration cases are explicitly skipped on Windows; the existing Windows SDK and DPAPI tests remain active. This is evidence for the bundled bridge and pinned JS SDK path, not a claim about every desktop host.
 
 The secure setup script and mode/ownership-checked non-symlink user-local file were merged previously (#25). That fallback is intentionally independent of the custom environment variable. Windows DPAPI is unchanged. Do not put the token in the portable plugin manifest or in CI logs.
 
-Pending for #11: run the exact manifest under a *real* macOS/Linux desktop host that filters environment, confirm local-file startup plus reconnect, and record the host/version. These JS SDK tests do not establish ChatGPT desktop host behavior.
+Pending for #11: run the exact manifest under a *real* macOS/Linux desktop host that filters environment, confirm local-file startup plus reconnect, and record the host/version. The POSIX tests establish the bundled bridge path under the pinned SDK, but do not establish ChatGPT desktop GUI behavior or real macOS/Linux desktop host versions.
