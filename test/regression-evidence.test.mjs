@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { copyFileSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -100,6 +100,34 @@ test('CLI exits nonzero for invalid evidence', () => {
     const result = spawnSync(process.execPath, [SCRIPT, evidencePath], { encoding: 'utf8' });
     assert.equal(result.status, 1);
     assert.match(result.stderr, /Host must be nonempty text/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('CLI exits nonzero for invalid evidence through a real symlink', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'regression evidence #'));
+  try {
+    const link = join(directory, 'regression-evidence-link.mjs');
+    const evidencePath = join(directory, 'invalid evidence.json');
+    try {
+      symlinkSync(SCRIPT, link, 'file');
+    } catch (error) {
+      if (process.platform === 'win32' && error?.code === 'EPERM') {
+        t.skip('Windows symbolic links are not permitted in this environment');
+        return;
+      }
+      throw error;
+    }
+    writeFileSync(evidencePath, JSON.stringify({ ...fixture(), host: ' ' }));
+    const result = spawnSync(process.execPath, [link, evidencePath], { encoding: 'utf8' });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /Host must be nonempty text/);
+
+    writeFileSync(evidencePath, JSON.stringify(fixture()));
+    const validResult = spawnSync(process.execPath, [link, evidencePath], { encoding: 'utf8' });
+    assert.equal(validResult.status, 0);
+    assert.match(validResult.stdout, /Evidence has the required fields/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

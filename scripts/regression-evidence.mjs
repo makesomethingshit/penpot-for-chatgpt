@@ -1,5 +1,6 @@
+import { realpathSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 export const SKILLS = [
   'penpot-use', 'penpot-generate-design', 'penpot-design-system',
@@ -46,7 +47,21 @@ export function validateEvidence(record) {
   return errors;
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+const normalizedRealPath = path => {
+  const realPath = realpathSync.native(path);
+  return process.platform === 'win32' ? realPath.toLowerCase() : realPath;
+};
+
+const isDirectExecution = () => {
+  if (!process.argv[1]) return false;
+  try {
+    return normalizedRealPath(process.argv[1]) === normalizedRealPath(fileURLToPath(import.meta.url));
+  } catch {
+    return false;
+  }
+};
+
+if (isDirectExecution()) {
   try {
     const evidence = JSON.parse(await readFile(process.argv[2], 'utf8'));
     const errors = validateEvidence(evidence);
