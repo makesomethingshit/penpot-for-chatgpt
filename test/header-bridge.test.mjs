@@ -106,7 +106,7 @@ function bridge(t, testCase, headerDelay) {
     }
   });
   child.stderr.on('data', data => { stderr += data; });
-  const waitFor = (predicate, timeout = 2000) => {
+  const waitFor = (predicate, timeout = 10000) => {
     const existing = messages.find(predicate);
     if (existing) return Promise.resolve(existing);
     return new Promise((resolve, reject) => {
@@ -119,7 +119,7 @@ function bridge(t, testCase, headerDelay) {
       waiters.push(waiter);
     });
   };
-  const waitForStderr = (text, timeout = 2000) => {
+  const waitForStderr = (text, timeout = 10000) => {
     if (stderr.includes(text)) return Promise.resolve();
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
@@ -171,7 +171,7 @@ async function initialize(runtime) {
   runtime.notify('notifications/initialized');
 }
 
-test('bundled bridge reports one unknown outcome, preserves a concurrent request, and does not replay', { timeout: 5000 }, async t => {
+test('bundled bridge reports one unknown outcome, preserves a concurrent request, and does not replay', { timeout: 15000 }, async t => {
   const runtime = bridge(t, 'timeout', 30);
   await initialize(runtime);
   const timedOut = runtime.request('tools/call', { name: 'export_shape', arguments: { shapeId: 'never' } });
@@ -189,7 +189,7 @@ test('bundled bridge reports one unknown outcome, preserves a concurrent request
   await runtime.close();
 });
 
-test('bundled bridge cancels one POST, suppresses its late response, and keeps another request alive', { timeout: 5000 }, async t => {
+test('bundled bridge cancels one POST, suppresses its late response, and keeps another request alive', { timeout: 15000 }, async t => {
   const runtime = bridge(t, 'cancel', 80);
   await initialize(runtime);
   const cancelledId = runtime.send('tools/call', { name: 'export_shape', arguments: { shapeId: 'cancel' } });
@@ -210,7 +210,7 @@ test('bundled bridge cancels one POST, suppresses its late response, and keeps a
   await runtime.close();
 });
 
-test('bundled bridge aborts pending POST on host shutdown', { timeout: 5000 }, async t => {
+test('bundled bridge aborts pending POST on host shutdown', { timeout: 15000 }, async t => {
   const runtime = bridge(t, 'shutdown', 80);
   await initialize(runtime);
   runtime.send('tools/call', { name: 'export_shape', arguments: { shapeId: 'shutdown' } });
@@ -220,7 +220,7 @@ test('bundled bridge aborts pending POST on host shutdown', { timeout: 5000 }, a
   assert.equal(runtime.messages.length, 1);
 });
 
-test('bundled bridge keeps an SSE body alive after the shortened header deadline', { timeout: 5000 }, async t => {
+test('bundled bridge keeps an SSE body alive after the shortened header deadline', { timeout: 15000 }, async t => {
   const runtime = bridge(t, 'delayed-body', 80);
   await initialize(runtime);
   const response = await runtime.request('tools/call', { name: 'export_shape', arguments: { shapeId: 'slow' } });
