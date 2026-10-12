@@ -1,6 +1,6 @@
 # Host compatibility evidence
 
-Checked 2026-10-12. Target formats: Agent Plugins 1.0.0 portable manifests and the existing Codex compatibility overlay. No release/version change is included.
+Checked 2026-10-11. Target formats: Agent Plugins 1.0.0 portable manifests and the existing Codex compatibility overlay. No release/version change is included.
 
 `npm run check` now compiles the externally published JSON Schemas for portable `plugin.json` and `mcp.json`, using the already locked SDK dependency Ajv 8.20.0 resolved from the SDK package (including nested npm layouts). Offline schema snapshots are unchanged downloads from:
 
@@ -24,6 +24,16 @@ The actual installed desktop executable's app-server returned all five enabled s
 A direct SDK smoke check launched the installed MCP manifest's `node`, args and cwd after `${PLUGIN_ROOT}` substitution. Initialization and tool discovery succeeded; all four live SaaS schemas lacked `sessionId`. A read-only `execute_code` via this installed bridge confirmed access to the same fixture file/page. This proves the installed bridge launcher works; automatic plugin MCP startup inside a newly started desktop chat and archive import are not separately exercised.
 
 The bundled bridge was built and its initialization/tool forwarding tested locally; Linux/macOS and final-SHA GitHub CI were not run locally. Both checked-in MCP formats use `node`, `${PLUGIN_ROOT}/server/bridge.mjs` and cwd `${PLUGIN_ROOT}`; no new endpoint, credential, launcher or capabilities are introduced. Issue #4 remains open for the deliberate unversioned overlay limitation and untested archive-import/automatic desktop-MCP lifecycle paths. Local installation, host skill/MCP discovery and installed bridge live access passed.
+
+## Stdio host receive-buffer boundary (SDK 1.32.1)
+
+The bridge supports incoming frames up to 64 MiB and limits its own outgoing queue, but it **cannot raise the desktop host's receiver limit**. The default `StdioClientTransport` reads a maximum 10 MiB frame. `test/stdio-host-receive.test.mjs` launches an actual SDK client with a child emitting 2 MiB / 11 MiB frames: the default receiver accepts the first and rejects the second, while an explicitly configured 16 MiB receiver accepts the latter.
+
+`test/stdio-host-bridge.test.mjs` runs the actual bundled `plugin/server/bridge.mjs` behind an actual SDK `Client` and `StdioClientTransport`, with a sanitized synthetic fetch implementation. Two concurrent tool calls produce a normal text response and an 11 MiB image: the explicit 16 MiB receiver delivers both intact, while the default 10 MiB receiver delivers the normal response and rejects the image with the SDK receive-buffer error and connection close. The same test sends an inbound JSON-RPC frame larger than 64 MiB to the bundled bridge and requires a nonzero exit plus the safe local-frame diagnostic. The existing 11 MiB inbound success control remains in `test/stdio-buffer.test.mjs`; there is no `test/stdio-inbound.test.mjs` in this checkout.
+
+This documents an interoperability limit; it does **not** claim the ChatGPT desktop host uses the SDK default. Until the installed host advertises its own receive limit, prefer smaller exports. A host-side buffer overflow should not be called a bridge-side success. The existing 64 MiB inbound/stream safeguards are unchanged.
+
+Local acceptance evidence now covers the SDK boundary, the bundled bridge's concurrent forwarding path, and the bridge's fatal inbound boundary. The actual ChatGPT desktop receiver and its behavior for concurrent normal tool calls plus an 11 MiB image remain unmeasured, so this evidence does not establish ChatGPT desktop compatibility, host-side size negotiation, or a chunking API. Do not invent unsupported MCP chunking or silently truncate images.
 
 ## Host-filtered custom variables on POSIX
 
