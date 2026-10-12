@@ -4,6 +4,7 @@ import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { mediaTypeEssence } from '@modelcontextprotocol/sdk/shared/mediaType.js';
 import { serializeMessage } from '@modelcontextprotocol/sdk/shared/stdio.js';
+import { createParser } from 'eventsource-parser';
 
 const MAX_BYTES = 64 * 1024 * 1024;
 let remote;
@@ -12,9 +13,25 @@ let output;
 let diagnostics;
 let stopping = false;
 let initializeRequestId;
+const pendingRequests = new Map();
+function retirePendingRequest(id, owner) {
+  if (owner && pendingRequests.get(id) !== owner) return false;
+  const retired = pendingRequests.delete(id);
+  if (retired && initializeRequestId === id) initializeRequestId = undefined;
+  return retired;
+}
+function failPendingRequest(id, message, owner) {
+  if (!owner || pendingRequests.get(id) !== owner || !retirePendingRequest(id, owner) || stopping) return;
+  writeOutput(output, serializeMessage({ jsonrpc: '2.0', id,
+    error: { code: -32000, message }
+  }));
+}
+
 async function stop() {
   if (stopping) return;
   stopping = true;
+  pendingRequests.clear();
+  initializeRequestId = undefined;
   await Promise.allSettled([remote?.close(), local?.close()]);
 }
 
@@ -34,6 +51,15 @@ function resourceLimit() {
 }
 
 async function boundedFetch(input, init) {
+  let postRequestIds = [];
+  if (init.method === 'POST' && typeof init.body === 'string') {
+    try {
+      const messages = JSON.parse(init.body);
+      postRequestIds = (Array.isArray(messages) ? messages : [messages])
+        .filter(message => message && typeof message.method === 'string' && Object.hasOwn(message, 'id'))
+        .map(message => ({ id: message.id, owner: pendingRequests.get(message.id) }));
+    } catch { /* Never log a sensitive request body. */ }
+  }
   const response = await fetch(input, { ...init, redirect: 'error' });
   if (!response.body) return response;
   const sse = response.ok && mediaTypeEssence(response.headers.get('content-type')) === 'text/event-stream';
@@ -41,6 +67,12 @@ async function boundedFetch(input, init) {
   let lineBytes = 0;
   let previousCR = false;
   let eventEnded = false;
+  let resumableId = false;
+  if (!sse) postRequestIds = [];
+  const decoder = postRequestIds.length ? new TextDecoder() : undefined;
+  const parser = decoder && createParser({
+    onEvent: event => { if (event.id) resumableId = true; }
+  });
   const body = response.body.pipeThrough(new TransformStream({
     transform(chunk, controller) {
       if (chunk.byteLength > MAX_BYTES) throw resourceLimit();
@@ -72,10 +104,34 @@ async function boundedFetch(input, init) {
           previousCR = byte === 13;
         }
       }
+      if (parser) parser.feed(decoder.decode(chunk, { stream: true }));
       controller.enqueue(chunk);
     }
   }), { signal: init.signal });
-  return new Response(body, response);
+  if (!postRequestIds.length) return new Response(body, response);
+  // The SDK handles POST SSE asynchronously: send() may resolve before the stream
+  // closes without a JSON-RPC result. Preserve backpressure and do not replay edits.
+  const reader = body.getReader();
+  const checkedBody = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          controller.close();
+          if (!resumableId) setImmediate(() => postRequestIds.forEach(({ id, owner }) =>
+            failPendingRequest(id, 'Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.', owner)
+          ));
+        } else controller.enqueue(value);
+      } catch (error) {
+        controller.error(error);
+        if (!resumableId) setImmediate(() => postRequestIds.forEach(({ id, owner }) =>
+          failPendingRequest(id, 'Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.', owner)
+        ));
+      }
+    },
+    cancel(reason) { return reader.cancel(reason); }
+  });
+  return new Response(checkedBody, response);
 }
 
 function writeOutput(stream, text) {
@@ -105,6 +161,9 @@ if (url) try {
   output.once('error', () => { process.exitCode = 1; stop(); });
   diagnostics.once('error', () => { process.exitCode = 1; stop(); });
   remote.onmessage = message => {
+    if (Object.hasOwn(message, 'id') && !Object.hasOwn(message, 'method')) {
+      if (!pendingRequests.delete(message.id)) return;
+    }
     // Only the matching initialize response is allowed to negotiate HTTP protocol headers.
     if (initializeRequestId !== undefined && message.id === initializeRequestId) {
       initializeRequestId = undefined;
@@ -130,15 +189,16 @@ if (url) try {
     }
   };
   local.onmessage = message => {
+    const isCancellation = message.method === 'notifications/cancelled';
+    if (isCancellation) retirePendingRequest(message.params?.requestId);
+    const isRequest = !isCancellation && typeof message.method === 'string' && Object.hasOwn(message, 'id');
+    const owner = isRequest ? {} : undefined;
+    if (isRequest) pendingRequests.set(message.id, owner);
     if (message.method === 'initialize' && Object.hasOwn(message, 'id')) {
       initializeRequestId = message.id;
     }
     remote.send(message).catch(() => {
-      if (message.method && Object.hasOwn(message, 'id')) {
-        writeOutput(output, serializeMessage({ jsonrpc: '2.0', id: message.id, error: {
-          code: -32000, message: 'Penpot connection failed. Check local configuration and the connected Penpot file.'
-        } }));
-      }
+      if (isRequest) failPendingRequest(message.id, 'Penpot connection failed. Remote outcome unknown; inspect the intended file before retrying.', owner);
     });
   };
   local.onclose = () => stop();

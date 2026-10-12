@@ -16,8 +16,13 @@ globalThis.fetch = async (_, init) => {
   let index = 0;
   const encoder = new TextEncoder();
   const image = mode === 'legitimate' || mode === 'slow-output' ? 'a'.repeat(12 * 1024 * 1024) : '';
-  const payload = JSON.stringify({ jsonrpc: '2.0', id: request.id ?? 1,
-    result: { content: [{ type: 'image', data: image, mimeType: 'image/png' }], label: '한글' } });
+  // Stalled output must be tested with distinct, legitimate messages. Duplicate
+  // JSON-RPC responses for the same id are now intentionally suppressed by the bridge.
+  const payload = JSON.stringify(mode === 'slow-output'
+    ? { jsonrpc: '2.0', method: 'notifications/message',
+        params: { level: 'info', data: { content: [{ type: 'image', data: image, mimeType: 'image/png' }] } } }
+    : { jsonrpc: '2.0', id: request.id ?? 1,
+        result: { content: [{ type: 'image', data: image, mimeType: 'image/png' }], label: '한글' } });
   const body = new ReadableStream({
     pull(controller) {
       if (mode === 'slow-error-output') {
