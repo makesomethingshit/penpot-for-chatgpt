@@ -10019,9 +10019,13 @@ var diagnostics;
 var stopping = false;
 var initializeRequestId;
 var pendingRequests = /* @__PURE__ */ new Map();
+function retirePendingRequest(id) {
+  const retired = pendingRequests.delete(id);
+  if (retired && initializeRequestId === id) initializeRequestId = void 0;
+  return retired;
+}
 function failPendingRequest(id, message) {
-  if (!pendingRequests.delete(id) || stopping) return;
-  if (initializeRequestId === id) initializeRequestId = void 0;
+  if (!retirePendingRequest(id) || stopping) return;
   writeOutput(output, serializeMessage({
     jsonrpc: "2.0",
     id,
@@ -10031,6 +10035,8 @@ function failPendingRequest(id, message) {
 async function stop() {
   if (stopping) return;
   stopping = true;
+  pendingRequests.clear();
+  initializeRequestId = void 0;
   await Promise.allSettled([remote?.close(), local?.close()]);
 }
 function resourceLimit() {
@@ -10186,13 +10192,15 @@ if (url2) try {
     }
   };
   local.onmessage = (message) => {
-    const isRequest = Boolean(message.method && Object.hasOwn(message, "id"));
+    const isCancellation = message.method === "notifications/cancelled";
+    if (isCancellation) retirePendingRequest(message.params?.requestId);
+    const isRequest = !isCancellation && Boolean(message.method && Object.hasOwn(message, "id"));
     if (isRequest) pendingRequests.set(message.id, true);
     if (message.method === "initialize" && Object.hasOwn(message, "id")) {
       initializeRequestId = message.id;
     }
     remote.send(message).catch(() => {
-      if (isRequest) failPendingRequest(message.id, "Penpot connection failed. Check local configuration and the connected Penpot file.");
+      if (isRequest) failPendingRequest(message.id, "Penpot connection failed. Remote outcome unknown; inspect the intended file before retrying.");
     });
   };
   local.onclose = () => stop();
