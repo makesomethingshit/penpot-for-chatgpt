@@ -70,8 +70,8 @@ test('a pinned session is retained; missing session never silently falls back to
 test('unknown inventory is distinct from known empty and permits initial supported read-only discovery', () => {
   assert.equal(preflight({ executeCodeSupports: true, exportShapeSupports: true, readOnlyDiscovery: true }).autoSelectedReadOnly, true);
   assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true, inventoryKnown: true }), /No Penpot sessions are connected/);
-  assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true }), /explicitly confirm exactly one connected tab/);
-  assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true, confirmedOneConnectedTab: true }), /explicitly confirm exactly one connected tab/);
+  assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true }), /explicit session ID.*read-only discovery/);
+  assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true, confirmedOneConnectedTab: true }), /explicit session ID.*read-only discovery/);
 });
 
 test('a pinned supported route fails closed when disconnect leaves zero reported sessions', () => {
@@ -136,4 +136,38 @@ test('identical file and page IDs pass the context guard but do not prove legacy
   const remaining = { fileId: 'file-a', pageId: 'page-a' };
   assert.deepEqual(remaining, pinned);
   assert.throws(() => preflight({ confirmedOneConnectedTab: true, interrupted: true }), /confirm, reselect and re-inspect/);
+});
+
+
+test('supported unknown inventory gives an actionable ID or discovery recovery path', () => {
+  const state = { executeCodeSupports: true };
+  assert.throws(() => preflight(state), /explicit session ID.*read-only discovery/);
+  assert.equal(preflight({ ...state, chosen: 'confirmed-session' }).selectors.execute_code.sessionId, 'confirmed-session');
+  assert.equal(preflight({ ...state, readOnlyDiscovery: true }).autoSelectedReadOnly, true);
+});
+
+test('confirmed replacement session uses the new pin for recovery before writes or exports', () => {
+  const recovery = {
+    executeCodeSupports: true, exportShapeSupports: true,
+    invokedTools: ['execute_code', 'export_shape'], inventoryKnown: true,
+    reported: ['new-session', 'other-tab'], chosen: 'new-session',
+    interrupted: true, intendedTargetConfirmed: true, reselected: true,
+    readOnlyDiscovery: true
+  };
+  const read = preflight(recovery);
+  assert.deepEqual(read.selectors, { execute_code: { sessionId: 'new-session' }, export_shape: { sessionId: 'new-session' } });
+  assert.equal(read.recoveryPendingVerification, true);
+  assert.throws(() => preflight({ ...recovery, readOnlyDiscovery: false, currentOperation: 'write' }), /re-inspect/);
+  const verified = { ...recovery, reinspected: true, readOnlyDiscovery: false };
+  assert.equal(preflight({ ...verified, currentOperation: 'write' }).selectors.execute_code.sessionId, 'new-session');
+  assert.equal(preflight({ ...verified, currentInvokedTool: 'export_shape', currentOperation: 'export' }).selectors.export_shape.sessionId, 'new-session');
+  assert.throws(() => preflight({ ...recovery, intendedTargetConfirmed: false }), /confirm, reselect/);
+});
+
+
+test('reconnect policy replaces stale pins only after confirmation of the intended tab and inspection', () => {
+  assert.match(doc, /new session ID, the user must confirm/);
+  assert.match(doc, /Set `chosenId` to that confirmed new ID/);
+  assert.match(doc, /recovery inspection on the new route, verify its file\/page\/target/);
+  assert.match(doc, /If those IDs differ, stop/);
 });

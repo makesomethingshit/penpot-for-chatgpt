@@ -6,7 +6,7 @@ This is a **pending live-host test**, not evidence that current ChatGPT desktop 
 2. Create **two disposable Penpot files** A and B and connect both browser tabs. Capture the server-reported IDs when supported; never guess ID-to-file mapping.
 3. Explicitly choose A and inspect/file-pin A. Perform one *authorized*, disposable change, read back the same ID and export from A. Confirm B is unchanged.
 4. Disconnect A, retain B, attempt a follow-up mutation/export. **Expected**: fail closed; known empty or unknown supported inventory fails even with a pinned A route, and a legacy host without selectors must not resume merely because one tab remains. Never fall back to B.
-5. To resume, reconnect the intended tab, explicitly confirm and reselect it, then perform a fresh read-only inspection of its file/page/shape IDs before any mutation or export. If B is chosen as a new target, record that explicit choice; a legacy host cannot prove that a remaining B is A.
+5. To resume, reconnect the intended tab. If reload creates a new session ID, have the user confirm it belongs to that intended tab, replace the stale route pin with the confirmed ID, and reselect it. Then perform a fresh read-only inspection of its file/page/shape IDs before any mutation or export. If B is chosen as a new target, record that explicit choice; a legacy host cannot prove that a remaining B is A.
 6. Repeat with **two tabs showing the same file/page**. File/page checks alone cannot distinguish their sessions. When routing is not supported, treat matching IDs as insufficient continuity evidence, require the explicit recovery steps above, and mark atomic export routing as unverified.
 
 | Mode | Expected | Evidence state |
@@ -24,3 +24,5 @@ This is a **pending live-host test**, not evidence that current ChatGPT desktop 
 | Two tabs same file/page | Must not infer session from identical file/page IDs | Unverified |
 
 The checked-in preflight JS example in `penpot-use/SKILL.md` is covered by a synthetic test. It is not a new session API and cannot force a host without `sessionId` to provide atomic routing. Keep issue #5 open until the real acceptance matrix is run.
+
+Reload recovery uses the confirmed replacement session ID for the pending read, verifies the original file/page/targets, and resumes writes/exports only after successful verification. `test/session-routing-policy.test.mjs` covers that transition, actionable unknown-inventory retry, independent tool selectors, same-file ambiguity and blocked writes before recovery inspection. Live ChatGPT multi-tab acceptance remains unverified; #5 stays open.
