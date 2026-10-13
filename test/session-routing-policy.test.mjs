@@ -51,10 +51,10 @@ test('single tab stays automatic when both scoped tools support route selection'
 });
 
 test('session selectors reject non-string or empty IDs before calling Penpot', () => {
-  for (const chosen of [123, true, {}, [], '', '   ']) {
+  for (const chosen of [123, true, null, {}, [], '', '   ']) {
     assert.throws(() => preflight({ executeCodeSupports: true, chosen }), /session IDs must be nonempty strings/);
   }
-  for (const reported of [[123], [''], ['   '], ['session-a', null]]) {
+  for (const reported of [123, null, {}, [123], [''], ['   '], ['session-a', null]]) {
     assert.throws(() => preflight({ executeCodeSupports: true, inventoryKnown: true, reported }), /session IDs must be nonempty strings/);
   }
 });

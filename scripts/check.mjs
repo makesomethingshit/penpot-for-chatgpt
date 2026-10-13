@@ -20,14 +20,14 @@ async function pluginPath(path) {
   assert.ok(!isAbsolute(fromRoot) && fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`), 'Path escapes plugin');
   return resolved;
 }
-const plugin = await json('plugin.json');
+const plugin = await json(await pluginPath('plugin.json'));
 const ajv = new Ajv2020({ strict: false, allErrors: true });
 for (const [path, schemaName] of [['plugin.json', 'plugin'], ['mcp.json', 'mcp']]) {
   const schema = JSON.parse(await readFile(new URL(`schemas/${schemaName}.schema.json`, import.meta.url), 'utf8'));
   const validate = ajv.compile(schema);
-  assert.ok(validate(await json(path)), `${path}: ${ajv.errorsText(validate.errors)}`);
+  assert.ok(validate(await json(await pluginPath(path))), `${path}: ${ajv.errorsText(validate.errors)}`);
 }
-const legacy = await json('.codex-plugin/plugin.json');
+const legacy = await json(await pluginPath('.codex-plugin/plugin.json'));
 for (const field of ['name', 'version', 'description', 'author', 'homepage', 'repository', 'keywords']) {
   assert.deepEqual(legacy[field], plugin[field], `Compatibility manifest: ${field}`);
 }
@@ -73,12 +73,12 @@ for (const field of ['logo', 'logoDark', 'composerIcon', 'composerIconDark']) {
   assert.ok(image.readUInt32BE(16) >= 48 && image.readUInt32BE(16) <= 4096);
   assert.ok(image.length <= 5 * 1024 * 1024);
 }
-assert.deepEqual((await json('mcp.json')).mcpServers, (await json('.mcp.json')).mcpServers);
-assert.deepEqual((await json('mcp.json')).mcpServers.penpot, {
+assert.deepEqual((await json(await pluginPath('mcp.json'))).mcpServers, (await json(await pluginPath('.mcp.json'))).mcpServers);
+assert.deepEqual((await json(await pluginPath('mcp.json'))).mcpServers.penpot, {
   type: 'stdio', command: 'node', args: ['${PLUGIN_ROOT}/server/bridge.mjs'], cwd: '${PLUGIN_ROOT}'
 });
-assert.ok((await stat('server/bridge.mjs')).size > 0);
-assert.equal((await json('server/build-info.json')).sdk, pkg.dependencies['@modelcontextprotocol/sdk']);
+assert.ok((await stat(await pluginPath('server/bridge.mjs'))).size > 0);
+assert.equal((await json(await pluginPath('server/build-info.json'))).sdk, pkg.dependencies['@modelcontextprotocol/sdk']);
 const skills = await readdir('skills');
 assert.equal(skills.length, 5);
 for (const name of skills) {

@@ -69,6 +69,18 @@ test('package check rejects invalid external-schema and host metadata fixtures',
   await writeFile(iconPath, invalidIcon);
   await assert.rejects(check(), error => error.code === 1);
   await writeFile(iconPath, iconBefore);
+  for (const corrupt of [
+    icon => { icon[0] = 0; },
+    icon => { icon.writeUInt32BE(12, 8); },
+    icon => { icon.write('BAD!', 12); },
+    icon => { icon[icon.length - 1] = 0; }
+  ]) {
+    const icon = Buffer.from(iconBefore);
+    corrupt(icon);
+    await writeFile(iconPath, icon);
+    await assert.rejects(check(), error => error.code === 1);
+  }
+  await writeFile(iconPath, iconBefore);
 
   // A junction also exercises real-path containment on Windows without symlink privileges.
   const skillsPath = join(directory, 'plugin/skills');
