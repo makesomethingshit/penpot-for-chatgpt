@@ -81,7 +81,7 @@ For creation, guard the same file/page IDs and resolve the planned destination c
 
 ### Restore the task pin after a plugin reload
 
-A reloaded Penpot plugin starts with new in-memory `storage`, so the task pin is absent even if the design tab reconnects. **Before** the interruption the agent must have retained the original `fileId`, `pageId`, and `targetIds` in its task context. Confirm any new session ID with the user, select that route, and run the following **read-only** recovery code with the four placeholders replaced by the previously pinned values (not the current selection). It rebuilds `storage.penpotTask` only after independently checking the original IDs; a mismatch leaves storage untouched:
+A reloaded Penpot plugin starts with new in-memory `storage`, so the task pin is absent even if the design tab reconnects. **Before** the interruption the agent must have retained the original `fileId`, `pageId`, and `targetIds` in its task context. Check the live `execute_code` schema. When it exposes `sessionId`, confirm the new ID with the user and select that route. For a legacy tool without that selector, explicitly confirm that the sole connected tab is the intended original target, reselect it and omit `confirmedSessionId`; do not invent an ID. Run the following **read-only** recovery code with the original saved values (not the current selection). It rebuilds `storage.penpotTask` only after independently checking the original IDs; a mismatch leaves storage untouched:
 
 ```javascript
 const originalTask = {
@@ -89,10 +89,14 @@ const originalTask = {
   pageId: 'REPLACE_PINNED_PAGE_ID',
   targetIds: ['REPLACE_PINNED_TARGET_ID']
 };
-const confirmedSessionId = 'REPLACE_CONFIRMED_SESSION_ID';
+const confirmedSessionId = 'REPLACE_CONFIRMED_SESSION_ID'; // undefined for a confirmed legacy route.
+const executeCodeSupportsSessionId = true; // Replace with the live recovery tool schema.
+const confirmedLegacyTarget = false; // Only true after confirming and reselecting the sole intended original tab.
 if (!originalTask || !Array.isArray(originalTask.targetIds) ||
     !originalTask.targetIds.every(id => typeof id === 'string') ||
-    typeof confirmedSessionId !== 'string' || !confirmedSessionId) {
+    (executeCodeSupportsSessionId
+      ? typeof confirmedSessionId !== 'string' || !confirmedSessionId
+      : !confirmedLegacyTarget || confirmedSessionId !== undefined)) {
   throw new Error('An existing task and confirmed Penpot route are required.');
 }
 const file = penpot.currentFile;
@@ -113,7 +117,7 @@ if (targets.some(shape => !shape)) {
 storage.penpotTask = {
   fileId: originalTask.fileId,
   pageId: originalTask.pageId,
-  sessionId: confirmedSessionId,
+  sessionId: executeCodeSupportsSessionId ? confirmedSessionId : undefined,
   targetIds: [...originalTask.targetIds]
 };
 return { restored: true, fileId: file.id, pageId: page.id,
@@ -142,7 +146,9 @@ if (!Object.hasOwn(sessionIdSupport, currentInvokedTool) || !invokedTools.includ
 const sessionInventoryKnown = false; // false = unavailable; true + [] = known empty.
 const reportedIds = []; // Only IDs explicitly reported by Penpot or chosen by the user.
 const chosenId = undefined; // Explicit user/session choice when supported.
-const readOnlyDiscovery = false; // Only an initial or explicitly confirmed recovery read may use auto-selection.
+const readOnlyDiscovery = false; // Initial ambiguity check or explicitly routed/confirmed recovery read only.
+const routingState = { initialDiscoveryAttempted: false }; // Reuse the SAME object in agent task context across calls; initialize once.
+const freshExportReadBack = false; // True only for the immediately following guarded export of the same pinned target.
 const confirmedOneConnectedTab = false; // Set true only after an explicit confirmation that exactly one tab is connected.
 const interruptedAfterPinnedSession = false; // Set after the active or pinned connection is interrupted.
 const intendedTargetConfirmed = false; // The user confirms the remaining/reconnected tab is intended.
@@ -150,6 +156,10 @@ const reselectedAfterInterruption = false; // The intended target was explicitly
 const reinspectedAfterInterruption = false; // A fresh read-only call verified file/page/target after re-selection.
 const currentToolSupportsSessionId = sessionIdSupport[currentInvokedTool];
 const selectedSessionId = chosenId ?? (reportedIds.length === 1 ? reportedIds[0] : undefined);
+const initialDiscovery = !interruptedAfterPinnedSession &&
+  !sessionInventoryKnown && !selectedSessionId &&
+  currentToolSupportsSessionId && currentInvokedTool === "execute_code" &&
+  currentOperation === "read" && readOnlyDiscovery;
 const recoveryRead = interruptedAfterPinnedSession &&
   currentInvokedTool === "execute_code" &&
   currentOperation === "read" &&
@@ -159,6 +169,9 @@ const recoveryRead = interruptedAfterPinnedSession &&
   !reinspectedAfterInterruption;
 if (readOnlyDiscovery && currentOperation !== "read") {
   throw new Error("readOnlyDiscovery is allowed only for a read-only route discovery or recovery inspection.");
+}
+if (readOnlyDiscovery && currentInvokedTool !== "execute_code") {
+  throw new Error("Read-only discovery requires execute_code; export cannot discover a route.");
 }
 if (sessionInventoryKnown && reportedIds.length === 0) {
   throw new Error("No Penpot sessions are connected; re-establish the intended route before editing or exporting.");
@@ -179,8 +192,12 @@ if (chosenId && !currentToolSupportsSessionId &&
 }
 if (!sessionInventoryKnown && chosenId && currentToolSupportsSessionId) {
   // A user-supplied ID is explicit even when the host has no inventory listing.
-} else if (!sessionInventoryKnown && readOnlyDiscovery && currentToolSupportsSessionId) {
-  // Let the server auto-select for this initial read-only ambiguity check.
+} else if (initialDiscovery) {
+  if (routingState.initialDiscoveryAttempted) {
+    throw new Error("Initial discovery was already attempted; choose an explicit session before another unpinned call.");
+  }
+  // Consume before the remote call, including failures: never silently auto-select again.
+  routingState.initialDiscoveryAttempted = true;
 } else if (!sessionInventoryKnown && !currentToolSupportsSessionId && confirmedOneConnectedTab) {
   // A legacy host can proceed only after the user confirms its single active tab.
 } else if (!sessionInventoryKnown) {
@@ -204,10 +221,14 @@ for (const tool of invokedTools) {
     const legacyGuardSafe = sessionInventoryKnown
       ? reportedIds.length === 1 && (!chosenId || reportedIds[0] === chosenId)
       : confirmedOneConnectedTab;
-    (legacyGuardSafe ? downgradedTools : unsupportedTools).push(tool);
+    const guarded = legacyGuardSafe && (tool !== "export_shape" || freshExportReadBack);
+    (guarded ? downgradedTools : unsupportedTools).push(tool);
   }
 }
 if (unsupportedTools.includes(currentInvokedTool)) {
+  if (currentInvokedTool === "export_shape" && !freshExportReadBack) {
+    throw new Error("An unrouted export needs a fresh guarded target read-back and an intended singleton before exporting.");
+  }
   throw new Error(`${currentInvokedTool} does not expose session routing for the current target set; reject or keep it read-only.`);
 }
 return {
@@ -215,11 +236,15 @@ return {
   downgradedTools,
   unsupportedTools,
   recoveryPendingVerification: recoveryRead,
-  autoSelectedReadOnly: !sessionInventoryKnown && readOnlyDiscovery && currentToolSupportsSessionId
+  autoSelectedReadOnly: initialDiscovery
 };
 ```
 
 On a mixed-capability host, a chosen ID for `execute_code` remains pinned even when a separately invoked `export_shape` lacks `sessionId`: allow that export only when the connected session inventory is a **known matching singleton**, or when the user explicitly confirms that exactly one intended tab is connected and the export target was read back immediately beforehand. With ambiguous ownership, reject the export. Do not discard the routed selector from `execute_code`.
+
+Keep `routingState` outside the plugin in the agent's task context. Create it once for this task, reuse it for every preflight, and never reset it to obtain another unpinned discovery, even when the first call fails or a tab disconnects. After that attempt, obtain a reported or user-confirmed explicit ID before subsequent supported reads, writes or exports. Recovery reads use the confirmed replacement ID, not unscoped auto-selection. Only explicit new-target selection starts a new task and allowance.
+
+For any export lacking a selector, set `freshExportReadBack` only after a guarded read verifies the pinned file/page and explicit export shape IDs on the intended singleton. It authorizes only the immediately following export for that unchanged target: clear it after the export attempt and on any intervening read/write, target/route change, connection change or interruption. Tab-count confirmation alone never grants this evidence. If no guarded read is available, leave export unsupported. A known singleton still needs that fresh target check. These separate read and export calls cannot provide atomic tab isolation.
 
 Use `selectors[currentInvokedTool]` for the current call. A recovery result with `recoveryPendingVerification` is read-only; keep writes and exports blocked until a subsequent preflight sees `reinspectedAfterInterruption: true`. Capture each returned selector in the existing task context and `storage.penpotTask.sessionId`; recheck the same route at every step. If a later tool says the session disappeared or is ambiguous, fail closed. In an older host without routing support, a different tab with the *same file and page IDs* cannot be distinguished by in-code guards: never claim it is safe solely because those IDs match, and require the interruption recovery checks above before resuming.
 

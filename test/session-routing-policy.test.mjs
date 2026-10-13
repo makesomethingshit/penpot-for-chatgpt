@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 
-const doc = await readFile(new URL('../plugin/skills/penpot-use/SKILL.md', import.meta.url), 'utf8');
+const doc = (await readFile(new URL('../plugin/skills/penpot-use/SKILL.md', import.meta.url), 'utf8')).replaceAll('\r\n', '\n');
 const block = doc.split('### Session-routing decision preflight')[1]?.match(/```javascript\n([\s\S]*?)\n```/)?.[1];
 assert.ok(block, 'host-side preflight must remain executable');
 function preflight({
@@ -19,7 +19,9 @@ function preflight({
   interrupted = false,
   intendedTargetConfirmed = false,
   reselected = false,
-  reinspected = false
+  reinspected = false,
+  freshExportReadBack = false,
+  routingState = { initialDiscoveryAttempted: false }
 } = {}) {
   const script = block
     .replace('const invokedTools = ["execute_code"];', 'const invokedTools = ' + JSON.stringify(invokedTools) + ';')
@@ -36,7 +38,8 @@ function preflight({
     .replace('const intendedTargetConfirmed = false;', 'const intendedTargetConfirmed = ' + JSON.stringify(intendedTargetConfirmed) + ';')
     .replace('const reselectedAfterInterruption = false;', 'const reselectedAfterInterruption = ' + JSON.stringify(reselected) + ';')
     .replace('const reinspectedAfterInterruption = false;', 'const reinspectedAfterInterruption = ' + JSON.stringify(reinspected) + ';');
-  return new Function(script)();
+  const configured = script.replace('const freshExportReadBack = false;', 'const freshExportReadBack = ' + JSON.stringify(freshExportReadBack) + ';').replace('const routingState = { initialDiscoveryAttempted: false };', 'const routingState = providedRoutingState;');
+  return new Function('providedRoutingState', configured)(routingState);
 }
 
 test('single tab stays automatic when both scoped tools support route selection', () => {
@@ -58,7 +61,7 @@ test('selector support is required only for the tools this task invokes', () => 
   assert.deepEqual(result.unsupportedTools, ['export_shape']);
   assert.deepEqual(result.downgradedTools, []);
   assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: false, currentInvokedTool: 'export_shape', currentOperation: 'export', invokedTools: ['execute_code', 'export_shape'], inventoryKnown: true, reported: ['session-a', 'session-b'], chosen: 'session-b' }), /does not expose session routing/);
-  assert.deepEqual(preflight({ executeCodeSupports: true, exportShapeSupports: false, currentInvokedTool: 'export_shape', currentOperation: 'export', invokedTools: ['export_shape'], inventoryKnown: true, reported: ['session-a'] }).downgradedTools, ['export_shape']);
+  assert.deepEqual(preflight({ executeCodeSupports: true, exportShapeSupports: false, currentInvokedTool: 'export_shape', currentOperation: 'export', invokedTools: ['export_shape'], inventoryKnown: true, reported: ['session-a'], freshExportReadBack: true }).downgradedTools, ['export_shape']);
 });
 
 test('a pinned session is retained; missing session never silently falls back to another', () => {
@@ -178,7 +181,7 @@ test('mixed selector host keeps execute route while allowing only a confirmed-si
     executeCodeSupports: true, exportShapeSupports: false,
     invokedTools: ['execute_code', 'export_shape'],
     inventoryKnown: false, reported: [], chosen: 'pinned-session',
-    confirmedOneConnectedTab: true
+    confirmedOneConnectedTab: true, freshExportReadBack: true
   };
   const exec = preflight(route);
   assert.deepEqual(exec.selectors.execute_code, { sessionId: 'pinned-session' });
@@ -200,12 +203,14 @@ test('mixed selector host keeps execute route while allowing only a confirmed-si
 const restoreBlock = doc.split('### Restore the task pin after a plugin reload')[1]
   ?.match(new RegExp(String.fromCharCode(96).repeat(3) + 'javascript\\n([\\s\\S]*?)\\n' + String.fromCharCode(96).repeat(3)))?.[1];
 assert.ok(restoreBlock, 'reload recovery must have executable guarded storage restoration');
-function recoverTask(original, sessionId, { file = 'file-a', page = 'page-a', ids = ['target-a'], state = {} } = {}) {
+function recoverTask(original, sessionId, { file = 'file-a', page = 'page-a', ids = ['target-a'], state = {}, supports = true, legacyConfirmed = false } = {}) {
   const script = restoreBlock
     .replace(/const originalTask = \{[\s\S]*?\n\};/,
       'const originalTask = ' + JSON.stringify(original) + ';')
     .replace("const confirmedSessionId = 'REPLACE_CONFIRMED_SESSION_ID';",
-      'const confirmedSessionId = ' + JSON.stringify(sessionId) + ';');
+      'const confirmedSessionId = ' + JSON.stringify(sessionId) + ';')
+    .replace('const executeCodeSupportsSessionId = true;', 'const executeCodeSupportsSessionId = ' + JSON.stringify(supports) + ';')
+    .replace('const confirmedLegacyTarget = false;', 'const confirmedLegacyTarget = ' + JSON.stringify(legacyConfirmed) + ';');
   const penpot = { currentFile: { id: file }, currentPage: { id: page, root: {} }, selection: [{ id: 'unrelated-selection' }] };
   const penpotUtils = { findShape: predicate => ids.map(id => ({ id })).find(predicate) };
   const result = new Function('penpot', 'penpotUtils', 'storage', script)(penpot, penpotUtils, state);
@@ -234,4 +239,45 @@ test('reload recovery refuses changed file/page, missing targets, missing saved 
   const existing = { penpotTask: { fileId: 'other-file' } };
   assert.throws(() => recoverTask(original, 'new-session', { state: existing }), /already pinned/);
   assert.deepEqual(existing.penpotTask, { fileId: 'other-file' });
+});
+
+
+test('legacy reload restores original IDs without inventing a session selector', () => {
+  const original = { fileId: 'file-a', pageId: 'page-a', targetIds: ['target-a'] };
+  const { state } = recoverTask(original, undefined, { supports: false, legacyConfirmed: true });
+  assert.deepEqual(state.penpotTask, { ...original, sessionId: undefined });
+  assert.throws(() => recoverTask(original, undefined, { supports: false }), /confirmed Penpot route/);
+});
+
+test('unrouted export needs a fresh guarded target read-back even with a singleton confirmation', () => {
+  const route = { executeCodeSupports: true, invokedTools: ['execute_code', 'export_shape'], chosen: 'session-a', confirmedOneConnectedTab: true };
+  assert.deepEqual(preflight(route).selectors.execute_code, { sessionId: 'session-a' });
+  assert.deepEqual(preflight(route).unsupportedTools, ['export_shape']);
+  assert.throws(() => preflight({ ...route, currentInvokedTool: 'export_shape', currentOperation: 'export' }), /fresh.*read-back/);
+  assert.deepEqual(preflight({ ...route, freshExportReadBack: true, currentInvokedTool: 'export_shape', currentOperation: 'export' }).downgradedTools, ['export_shape']);
+  assert.throws(() => preflight({ ...route, freshExportReadBack: false, currentInvokedTool: 'export_shape', currentOperation: 'export' }), /fresh.*read-back/);
+});
+
+test('initial unpinned discovery allowance is consumed before a second read can select another tab', () => {
+  const routingState = { initialDiscoveryAttempted: false };
+  const route = { executeCodeSupports: true, readOnlyDiscovery: true, routingState };
+  assert.equal(preflight(route).autoSelectedReadOnly, true);
+  assert.equal(routingState.initialDiscoveryAttempted, true);
+  assert.throws(() => preflight(route), /already attempted.*explicit session/);
+  assert.deepEqual(preflight({ ...route, readOnlyDiscovery: false, chosen: 'session-a' }).selectors.execute_code, { sessionId: 'session-a' });
+});
+
+
+test('one-time discovery cannot run through export or unpinned recovery', () => {
+  assert.throws(() => preflight({ exportShapeSupports: true, invokedTools: ['export_shape'], currentInvokedTool: 'export_shape', readOnlyDiscovery: true }), /requires execute_code/);
+  const recovery = { executeCodeSupports: true, readOnlyDiscovery: true, interrupted: true, intendedTargetConfirmed: true, reselected: true };
+  assert.throws(() => preflight(recovery), /explicit session ID/);
+  assert.equal(preflight({ ...recovery, chosen: 'new-session', routingState: { initialDiscoveryAttempted: true } }).recoveryPendingVerification, true);
+});
+
+test('fresh export evidence cannot bypass an ambiguous inventory or interrupted route', () => {
+  const route = { executeCodeSupports: true, invokedTools: ['execute_code', 'export_shape'], currentInvokedTool: 'export_shape', currentOperation: 'export', chosen: 'session-a', confirmedOneConnectedTab: true, freshExportReadBack: true };
+  assert.throws(() => preflight({ ...route, inventoryKnown: true, reported: ['session-a', 'session-b'] }), /does not expose session routing/);
+  assert.throws(() => preflight({ ...route, interrupted: true }), /confirm, reselect and re-inspect/);
+  assert.throws(() => preflight({ ...route, inventoryKnown: true, reported: ['session-b'] }), /unavailable/);
 });
