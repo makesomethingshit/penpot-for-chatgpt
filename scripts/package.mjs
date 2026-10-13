@@ -10,7 +10,7 @@ await import('./check.mjs');
 await mkdir('dist', { recursive: true });
 const staging = await mkdtemp(resolve('dist/staging-'));
 const files = ['.codex-plugin/plugin.json', '.mcp.json', 'mcp.json', 'plugin.json', 'README.md',
-  'assets/icon.png', 'assets/icon-dark.png', 'server/bridge-source.mjs', 'server/bridge.mjs',
+  'assets/icon.png', 'assets/icon-dark.png', 'server/bridge-source.mjs', 'server/header-deadline.mjs', 'server/bridge.mjs',
   'server/build-info.json', 'server/THIRD_PARTY_NOTICES.txt', 'server/connection.mjs',
   'scripts/penpot-setup.ps1', 'scripts/penpot-setup.mjs', 'scripts/validate-connection.mjs', 'scripts/penpot-doctor.mjs',
   ...(await readdir('plugin/skills')).map(skill => `skills/${skill}/SKILL.md`),

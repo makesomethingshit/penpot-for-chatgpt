@@ -1,4 +1,7 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { createParser } from 'eventsource-parser';
 import { connectionURL } from './connection.mjs';
+import { fetchWithHeaderDeadline } from './header-deadline.mjs';
 import { createWriteStream } from 'node:fs';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
@@ -12,9 +15,37 @@ let output;
 let diagnostics;
 let stopping = false;
 let initializeRequestId;
+const requestOwners = new Map();
+// SDK stream readers and reconnect timers inherit the send context. Initial GETs
+// stay transport-owned; only GET resumption belongs to the original POST.
+const requestContext = new AsyncLocalStorage();
+function failPendingRequest(id, message, owner) {
+  if (requestOwners.get(id) !== owner) return;
+  if (!requestOwners.delete(id) || stopping) return;
+  if (initializeRequestId === id) initializeRequestId = undefined;
+  writeOutput(output, serializeMessage({ jsonrpc: '2.0', id, error: { code: -32000, message } }));
+}
+
+function requestIdOfMessage(message) {
+  return message && !Array.isArray(message) && typeof message.method === 'string' && Object.hasOwn(message, 'id') && message.id !== undefined
+    ? message.id : undefined;
+}
+
+function requestIdOfBody(body) {
+  if (typeof body !== 'string') return;
+  try { return requestIdOfMessage(JSON.parse(body)); } catch { return; }
+}
+
+function combinedSignal(...signals) {
+  const available = signals.filter(Boolean);
+  return available.length > 1 ? AbortSignal.any(available) : available[0];
+}
+
 async function stop() {
   if (stopping) return;
   stopping = true;
+  for (const owner of requestOwners.values()) owner.controller.abort();
+  requestOwners.clear();
   await Promise.allSettled([remote?.close(), local?.close()]);
 }
 
@@ -34,13 +65,43 @@ function resourceLimit() {
 }
 
 async function boundedFetch(input, init) {
-  const response = await fetch(input, { ...init, redirect: 'error' });
+  const requestId = init.method === 'POST' ? requestIdOfBody(init.body) : undefined;
+  const resuming = init.method === 'GET' && new Headers(init.headers).has('last-event-id');
+  const owner = requestId === undefined ? (resuming ? requestContext.getStore() : undefined) : requestContext.getStore();
+  // Complete this cancelled SDK resume locally, without opening a remote stream
+  // or rejecting (which would cause another SDK retry). Other GETs stay intact.
+  if (resuming && owner?.cancelled) return new Response(null, { status: 405 });
+  const options = {
+    ...init,
+    signal: combinedSignal(init.signal, owner?.controller.signal),
+    redirect: 'error'
+  };
+  if (requestId !== undefined && (!owner || owner.cancelled)) {
+    throw new DOMException('Request was cancelled', 'AbortError');
+  }
+  const response = init.method === 'POST'
+    ? await fetchWithHeaderDeadline(fetch, input, options)
+    : await fetch(input, options);
   if (!response.body) return response;
   const sse = response.ok && mediaTypeEssence(response.headers.get('content-type')) === 'text/event-stream';
   let bytes = 0;
   let lineBytes = 0;
   let previousCR = false;
   let eventEnded = false;
+  let resumableId = false;
+  let postRequestIds = [];
+  if (sse && init.method === 'POST' && typeof init.body === 'string') {
+    try {
+      const messages = JSON.parse(init.body);
+      postRequestIds = (Array.isArray(messages) ? messages : [messages])
+        .filter(message => message && typeof message.method === 'string' && Object.hasOwn(message, 'id'))
+        .map(message => ({ id: message.id, owner }));
+    } catch { /* Never log a sensitive request body. */ }
+  }
+  const decoder = postRequestIds.length ? new TextDecoder() : undefined;
+  const parser = decoder && createParser({
+    onEvent: event => { if (event.id) resumableId = true; }
+  });
   const body = response.body.pipeThrough(new TransformStream({
     transform(chunk, controller) {
       if (chunk.byteLength > MAX_BYTES) throw resourceLimit();
@@ -72,10 +133,34 @@ async function boundedFetch(input, init) {
           previousCR = byte === 13;
         }
       }
+      if (parser) parser.feed(decoder.decode(chunk, { stream: true }));
       controller.enqueue(chunk);
     }
-  }), { signal: init.signal });
-  return new Response(body, response);
+  }), { signal: options.signal });
+  if (!postRequestIds.length) return new Response(body, response);
+  // The SDK handles POST SSE asynchronously: send() may resolve before the stream
+  // closes without a JSON-RPC result. Preserve backpressure and do not replay edits.
+  const reader = body.getReader();
+  const checkedBody = new ReadableStream({
+    async pull(controller) {
+      try {
+        const { value, done } = await reader.read();
+        if (done) {
+          controller.close();
+          if (!resumableId) setImmediate(() => postRequestIds.forEach(({ id, owner }) =>
+            failPendingRequest(id, 'Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.', owner)
+          ));
+        } else controller.enqueue(value);
+      } catch (error) {
+        controller.error(error);
+        if (!resumableId) setImmediate(() => postRequestIds.forEach(({ id, owner }) =>
+          failPendingRequest(id, 'Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.', owner)
+        ));
+      }
+    },
+    cancel(reason) { return reader.cancel(reason); }
+  });
+  return new Response(checkedBody, response);
 }
 
 function writeOutput(stream, text) {
@@ -105,6 +190,12 @@ if (url) try {
   output.once('error', () => { process.exitCode = 1; stop(); });
   diagnostics.once('error', () => { process.exitCode = 1; stop(); });
   remote.onmessage = message => {
+    const terminal = Object.hasOwn(message, 'result') || Object.hasOwn(message, 'error');
+    if (Object.hasOwn(message, 'id') && terminal) {
+      const owner = requestOwners.get(message.id);
+      if (!owner || owner.cancelled) return;
+      requestOwners.delete(message.id);
+    }
     // Only the matching initialize response is allowed to negotiate HTTP protocol headers.
     if (initializeRequestId !== undefined && message.id === initializeRequestId) {
       initializeRequestId = undefined;
@@ -130,13 +221,31 @@ if (url) try {
     }
   };
   local.onmessage = message => {
+    const requestId = requestIdOfMessage(message);
+    const requestOwner = requestId === undefined ? undefined : { controller: new AbortController(), cancelled: false };
+    if (requestOwner) requestOwners.set(requestId, requestOwner);
+    if (message.method === 'notifications/cancelled') {
+      const owner = requestOwners.get(message.params?.requestId);
+      if (owner) {
+        owner.cancelled = true;
+        owner.controller.abort();
+        requestOwners.delete(message.params.requestId);
+      }
+    }
     if (message.method === 'initialize' && Object.hasOwn(message, 'id')) {
       initializeRequestId = message.id;
     }
-    remote.send(message).catch(() => {
-      if (message.method && Object.hasOwn(message, 'id')) {
+    requestContext.run(requestOwner, () => remote.send(message)).catch(error => {
+      const currentOwner = requestId === undefined ? undefined : requestOwners.get(requestId);
+      if (requestOwner && currentOwner === requestOwner && !requestOwner.cancelled) {
+        requestOwners.delete(requestId);
+      }
+      if (typeof message.method === 'string' && Object.hasOwn(message, 'id')) {
+        if (!requestOwner || currentOwner !== requestOwner || requestOwner.cancelled || stopping) return;
         writeOutput(output, serializeMessage({ jsonrpc: '2.0', id: message.id, error: {
-          code: -32000, message: 'Penpot connection failed. Check local configuration and the connected Penpot file.'
+          code: -32000, message: error?.name === 'TimeoutError'
+            ? 'Penpot response headers timed out. Remote outcome unknown; inspect the intended file before retrying.'
+            : 'Penpot connection failed. Remote outcome unknown; inspect the intended file before retrying.'
         } }));
       }
     });

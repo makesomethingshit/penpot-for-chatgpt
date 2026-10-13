@@ -34,3 +34,11 @@ The bridge supports incoming frames up to 64 MiB and limits its own outgoing que
 This documents an interoperability limit; it does **not** claim the ChatGPT desktop host uses the SDK default. Until the installed host advertises its own receive limit, prefer smaller exports. A host-side buffer overflow should not be called a bridge-side success. The existing 64 MiB inbound/stream safeguards are unchanged.
 
 Local acceptance evidence now covers the SDK boundary, the bundled bridge's concurrent forwarding path, and the bridge's fatal inbound boundary. The actual ChatGPT desktop receiver and its behavior for concurrent normal tool calls plus an 11 MiB image remain unmeasured, so this evidence does not establish ChatGPT desktop compatibility, host-side size negotiation, or a chunking API. Do not invent unsupported MCP chunking or silently truncate images.
+
+## Host-filtered custom variables on POSIX
+
+`test/stdio-host-env.test.mjs` launches a real pinned `StdioClientTransport` child, verifying that `getDefaultEnvironment()` strips `PENPOT_MCP_URL` even when the parent has it; an explicit `env` override forwards it. On POSIX, the same file launches the actual bundled bridge with the filtered environment, reads a synthetic URL from a private `HOME` credential file, and uses a mock HTTP transport to verify initialization plus the SDK's GET reconnect. Missing files, unsafe modes and symlinks fail before startup, with no credential in stdout or stderr. These POSIX integration cases are explicitly skipped on Windows; the existing Windows SDK and DPAPI tests remain active. This is evidence for the bundled bridge and pinned JS SDK path, not a claim about every desktop host.
+
+The secure setup script and mode/ownership-checked non-symlink user-local file were merged previously (#25). That fallback is intentionally independent of the custom environment variable. Windows DPAPI is unchanged. Do not put the token in the portable plugin manifest or in CI logs.
+
+Pending for #11: run the exact manifest under a *real* macOS/Linux desktop host that filters environment, confirm local-file startup plus reconnect, and record the host/version. The POSIX tests establish the bundled bridge path under the pinned SDK, but do not establish ChatGPT desktop GUI behavior or real macOS/Linux desktop host versions.
