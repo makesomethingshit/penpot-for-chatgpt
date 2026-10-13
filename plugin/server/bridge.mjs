@@ -10040,6 +10040,7 @@ var local;
 var output;
 var diagnostics;
 var stopping = false;
+var sseResponseChannelExhausted = false;
 var initializeRequestId;
 var requestOwners = /* @__PURE__ */ new Map();
 var requestContext = new AsyncLocalStorage();
@@ -10224,7 +10225,17 @@ if (url2) try {
     }
     writeOutput(output, serializeMessage(message));
   };
-  remote.onerror = () => {
+  remote.onerror = (error) => {
+    if (!stopping && /^Maximum reconnection attempts \(\d+\) exceeded\.$/.test(error?.message ?? "")) {
+      sseResponseChannelExhausted = true;
+      for (const [id, owner] of [...requestOwners]) {
+        failPendingRequest(id, "Penpot response channel disconnected. Remote outcome unknown; inspect the file after restarting the connection before retrying.", owner);
+        owner.cancelled = true;
+        owner.controller.abort();
+      }
+      writeOutput(diagnostics, "Penpot SSE response channel exhausted reconnection attempts. Restart the MCP connection and inspect the intended file before retrying.\n");
+      return;
+    }
     writeOutput(diagnostics, "Penpot connection error. Check the local MCP URL, key validity, and active Penpot tab.\n");
   };
   local.onerror = () => {
@@ -10240,6 +10251,10 @@ if (url2) try {
   };
   local.onmessage = (message) => {
     const requestId = requestIdOfMessage(message);
+    if (sseResponseChannelExhausted) {
+      if (requestId !== void 0) writeOutput(output, serializeMessage({ jsonrpc: "2.0", id: requestId, error: { code: -32000, message: "Penpot response channel unavailable. Remote outcome unknown; restart the MCP connection and inspect the intended file before retrying." } }));
+      return;
+    }
     const requestOwner = requestId === void 0 ? void 0 : { controller: new AbortController(), cancelled: false };
     if (requestOwner) requestOwners.set(requestId, requestOwner);
     if (message.method === "notifications/cancelled") {
