@@ -50,6 +50,15 @@ test('single tab stays automatic when both scoped tools support route selection'
   assert.equal(preflight({ executeCodeSupports: true, exportShapeSupports: true, invokedTools: ['execute_code'], inventoryKnown: true, reported: ['session-a'], chosen: 'session-a' }).selectors.execute_code.sessionId, 'session-a');
 });
 
+test('session selectors reject non-string or empty IDs before calling Penpot', () => {
+  for (const chosen of [123, true, {}, [], '', '   ']) {
+    assert.throws(() => preflight({ executeCodeSupports: true, chosen }), /session IDs must be nonempty strings/);
+  }
+  for (const reported of [[123], [''], ['   '], ['session-a', null]]) {
+    assert.throws(() => preflight({ executeCodeSupports: true, inventoryKnown: true, reported }), /session IDs must be nonempty strings/);
+  }
+});
+
 test('multiple sessions fail closed without a routing selector or explicit choice', () => {
   assert.throws(() => preflight({ inventoryKnown: true, reported: ['session-a', 'session-b'] }), /no route selector/);
   assert.throws(() => preflight({ executeCodeSupports: true, exportShapeSupports: true, inventoryKnown: true, reported: ['session-a', 'session-b'] }), /Choose the intended/);

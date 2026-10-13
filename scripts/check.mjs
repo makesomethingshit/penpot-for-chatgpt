@@ -2,16 +2,24 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 // Resolve the locked SDK dependency from its owner, including nested npm layouts.
 const { default: Ajv2020 } = createRequire(import.meta.resolve('@modelcontextprotocol/sdk/client/index.js'))('ajv/dist/2020.js');
-import { readFile, readdir, stat } from 'node:fs/promises';
-import { resolve, relative, dirname } from 'node:path';
+import { readFile, readdir, realpath, stat } from 'node:fs/promises';
+import { resolve, relative, dirname, isAbsolute, sep } from 'node:path';
 
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
 const pkg = await json('package.json');
 const lock = await json('package-lock.json');
 const marketplace = await json('.agents/plugins/marketplace.json');
 assert.equal(marketplace.plugins.length, 1);
+assert.equal(marketplace.plugins[0].source.source, 'local');
 assert.equal(marketplace.plugins[0].source.path, './plugin');
 process.chdir('plugin');
+const pluginRoot = await realpath(process.cwd());
+async function pluginPath(path) {
+  const resolved = await realpath(path);
+  const fromRoot = relative(pluginRoot, resolved);
+  assert.ok(!isAbsolute(fromRoot) && fromRoot !== '..' && !fromRoot.startsWith(`..${sep}`), 'Path escapes plugin');
+  return resolved;
+}
 const plugin = await json('plugin.json');
 const ajv = new Ajv2020({ strict: false, allErrors: true });
 for (const [path, schemaName] of [['plugin.json', 'plugin'], ['mcp.json', 'mcp']]) {
@@ -50,15 +58,17 @@ if (ui.defaultPrompt !== undefined) {
 assert.ok(Array.isArray(ui.capabilities) && ui.capabilities.length <= 20);
 assert.ok(ui.capabilities.every(label => typeof label === 'string' && [...label].length <= 120));
 for (const path of [legacy.skills, legacy.mcpServers]) {
-  assert.ok(!relative(process.cwd(), resolve(path)).startsWith('..'), 'Compatibility path escapes plugin');
-  await stat(path);
+  await stat(await pluginPath(path));
 }
 for (const field of ['logo', 'logoDark', 'composerIcon', 'composerIconDark']) {
   assert.ok(typeof ui[field] === 'string' && ui[field].startsWith('./'), `Icon path: ${field}`);
-  const path = resolve(ui[field]);
-  assert.ok(!relative(process.cwd(), path).startsWith('..'));
+  const path = await pluginPath(ui[field]);
   const image = await readFile(path);
-  assert.equal(image.subarray(1, 4).toString(), 'PNG');
+  assert.ok(image.length >= 57, 'PNG icon is truncated');
+  assert.ok(image.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), 'Invalid PNG signature');
+  assert.equal(image.readUInt32BE(8), 13, 'Invalid PNG IHDR length');
+  assert.equal(image.subarray(12, 16).toString(), 'IHDR');
+  assert.ok(image.subarray(-12).equals(Buffer.from('0000000049454e44ae426082', 'hex')), 'Missing PNG IEND');
   assert.equal(image.readUInt32BE(16), image.readUInt32BE(20));
   assert.ok(image.readUInt32BE(16) >= 48 && image.readUInt32BE(16) <= 4096);
   assert.ok(image.length <= 5 * 1024 * 1024);
@@ -73,11 +83,11 @@ const skills = await readdir('skills');
 assert.equal(skills.length, 5);
 for (const name of skills) {
   const path = `skills/${name}/SKILL.md`;
-  const text = await readFile(path, 'utf8');
+  const text = await readFile(await pluginPath(path), 'utf8');
   assert.ok(text.startsWith(`---\nname: ${name}\n`) || text.startsWith(`---\r\nname: ${name}\r\n`));
   assert.match(text, /\ndescription: .+/);
   for (const match of text.matchAll(/\]\(([^)]+\.md)\)/g)) {
-    await stat(resolve(dirname(path), match[1]));
+    await stat(await pluginPath(resolve(dirname(path), match[1])));
   }
 }
 console.log(`Portable package checks passed: ${plugin.name} ${plugin.version ?? '(unreleased)'}, ${skills.length} skills.`);
