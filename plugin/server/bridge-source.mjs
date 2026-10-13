@@ -14,6 +14,7 @@ let local;
 let output;
 let diagnostics;
 let stopping = false;
+let sseResponseChannelExhausted = false;
 let initializeRequestId;
 const requestOwners = new Map();
 // SDK stream readers and reconnect timers inherit the send context. Initial GETs
@@ -205,7 +206,20 @@ if (url) try {
     }
     writeOutput(output, serializeMessage(message));
   };
-  remote.onerror = () => {
+  remote.onerror = error => {
+    // SDK 1.32.1 stops trying GET-SSE after its configured reconnection budget.
+    // A POST may already have committed remotely even though its reply is lost.
+    // Do not send new edits into a dead response channel or replay old edits.
+    if (!stopping && /^Maximum reconnection attempts \(\d+\) exceeded\.$/.test(error?.message ?? '')) {
+      sseResponseChannelExhausted = true;
+      for (const [id, owner] of [...requestOwners]) {
+        failPendingRequest(id, 'Penpot response channel disconnected. Remote outcome unknown; inspect the file after restarting the connection before retrying.', owner);
+        owner.cancelled = true;
+        owner.controller.abort();
+      }
+      writeOutput(diagnostics, 'Penpot SSE response channel exhausted reconnection attempts. Restart the MCP connection and inspect the intended file before retrying.\n');
+      return;
+    }
     writeOutput(diagnostics, 'Penpot connection error. Check the local MCP URL, key validity, and active Penpot tab.\n');
   };
   local.onerror = () => {
@@ -222,6 +236,12 @@ if (url) try {
   };
   local.onmessage = message => {
     const requestId = requestIdOfMessage(message);
+    if (sseResponseChannelExhausted) {
+      if (requestId !== undefined) writeOutput(output, serializeMessage({ jsonrpc: '2.0', id: requestId,
+        error: { code: -32000, message: 'Penpot response channel unavailable. Remote outcome unknown; restart the MCP connection and inspect the intended file before retrying.' }
+      }));
+      return;
+    }
     const requestOwner = requestId === undefined ? undefined : { controller: new AbortController(), cancelled: false };
     if (requestOwner) requestOwners.set(requestId, requestOwner);
     if (message.method === 'notifications/cancelled') {
