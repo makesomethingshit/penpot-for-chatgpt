@@ -56,7 +56,7 @@ throw new Error("Synthetic failure after retaining the created ID.");
 
 The retry must resolve `storage.regressionVariantId` in the same guarded page, modify that object, and assert source/neighbor snapshots and component/token links are preserved. Never replay the clone call blindly. Export both board IDs and inspect the images. Record unavailable checks rather than marking them passed.
 
-The fixture page/assets are retained for review. They are disposable but were not automatically deleted. Issue #1 remains incomplete until the required installed ChatGPT desktop workflow is replayed or the accepted host scope is explicitly changed.
+The fixture page/assets are retained for review. They are disposable but were not automatically deleted. **Historical status of this fixture:** it remains Codex/registered-remote-MCP evidence, not installed ChatGPT desktop execution. On 2026-10-13 the owner changed #1's acceptance method to a five-skill source/policy comparison with Figma. #29 completed that comparison and **closed #1**. See [Figma skill comparison](figma-skill-comparison.md). Actual ChatGPT Desktop five-skill replay still remains **NOT RUN**; closing the revised issue does not claim runtime certification.
 
 ## Initial inspection payload (#6)
 
@@ -85,4 +85,4 @@ The main task re-exported and inspected the additional clone's PNG **after the r
 
 The design-to-code skill now requires parsing generated HTML, checking duplicate IDs/repeated descendants, reconstructing semantic code and retaining label/ARIA references. The design-system skill requires re-resolving retained IDs on a missing-binding retry, verifying binding/value and exporting after recovery. These are workflow improvements; no upstream Penpot implementation was changed and no production root cause is asserted.
 
-Missing checks remain: ChatGPT desktop installed-plugin execution, multiple-tab routing (live schemas have no `sessionId`), and side-conversation frontend build/pixel parity. Issue #1 remains open.
+Missing checks remain: ChatGPT desktop installed-plugin execution, multiple-tab routing (the recorded live schemas had no `sessionId`), and side-conversation frontend build/pixel parity. **#1 is closed under its revised Figma-source-comparison method (#29); these runtime checks were not performed as part of that closure.**
