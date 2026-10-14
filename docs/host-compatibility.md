@@ -41,4 +41,6 @@ Local acceptance evidence now covers the SDK boundary, the bundled bridge's conc
 
 The secure setup script and mode/ownership-checked non-symlink user-local file were merged previously (#25). That fallback is intentionally independent of the custom environment variable. Windows DPAPI is unchanged. Do not put the token in the portable plugin manifest or in CI logs.
 
-Pending for #11: run the exact manifest under a *real* macOS/Linux desktop host that filters environment, confirm local-file startup plus reconnect, and record the host/version. The POSIX tests establish the bundled bridge path under the pinned SDK, but do not establish ChatGPT desktop GUI behavior or real macOS/Linux desktop host versions.
+**#11 is closed by #28 for the SDK/bridge compatibility acceptance:** environment filtering, private-file fallback, synthetic startup/reconnect, safe missing/unsafe/symlink rejection, secret-output negative control, and Windows non-regression were tested. This does **not** certify every desktop host.
+
+**Remaining manual host verification (NOT RUN):** start the exact packaged manifest under a real macOS/Linux ChatGPT desktop host that filters the environment, confirm private-file startup and reconnection, and record the host/version. The POSIX SDK tests do not establish ChatGPT GUI lifecycle or host-specific availability. Track any actual failure as a separate host-scoped issue rather than reopening completed SDK evidence by implication.
