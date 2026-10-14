@@ -2,7 +2,9 @@
 
 The Penpot MCP URL contains your account's `userToken`; treat the entire URL as a password. Never include it in an issue, pull request, log or screenshot.
 
-On Windows the setup script stores the connection outside the plugin, encrypted for the current Windows user with DPAPI. Processes running as that user can decrypt it. On macOS/Linux the bridge reads `PENPOT_MCP_URL` from its process environment; this project does not install a credential store there.
+On Windows, the setup script stores the connection outside the plugin, encrypted for the current Windows user with DPAPI. Processes running as that user can decrypt it.
+
+On macOS/Linux, the bridge accepts `PENPOT_MCP_URL` only when the host forwards it. For hosts that filter this variable, `plugin/scripts/penpot-setup.mjs` writes `~/.penpot-for-chatgpt/connection.json` inside a user-owned directory (0700) with a user-owned regular file (0600). This is **local plaintext protected by filesystem permissions**, not encryption or macOS Keychain/Linux Secret Service storage. The bridge rejects unsafe file mode/ownership and symlinks, and inspects and reads the same open file descriptor. Home-directory backups may copy this credential: secure or exclude them. Run the documented setup again if the token is rotated, and do not share or commit the file. See [local setup](README.md#macos-and-linux).
 
 The bridge accepts only the official HTTPS SaaS endpoint and refuses redirects for GET and POST, including SDK reconnections. Local connection failures use generic messages. Successful remote tool results pass through unchanged; design content is visible to the AI host you use. There is no separate analytics or telemetry endpoint in this project.
 

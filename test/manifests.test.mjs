@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
@@ -35,6 +35,7 @@ test('package check rejects invalid external-schema and host metadata fixtures',
     ['plugin/plugin.json', value => { value.extensions['com.openai'].interface.defaultPrompt = ['same', 'same']; }],
     ['plugin/plugin.json', value => { value.name = 'Bad Name'; }],
     ['plugin/plugin.json', value => { value.unsupported = true; }],
+    ['.agents/plugins/marketplace.json', value => { value.plugins[0].source.source = 'remote'; }],
     ['plugin/mcp.json', value => { delete value.mcpServers.penpot.command; }],
     ['plugin/mcp.json', value => { value.mcpServers.penpot.cwd = '../outside'; }],
     ['plugin/.codex-plugin/plugin.json', value => { value.skills = '../outside'; }],
@@ -59,4 +60,32 @@ test('package check rejects invalid external-schema and host metadata fixtures',
     await writeFile(fullPath, before);
     if (path !== 'plugin/.codex-plugin/plugin.json') await writeFile(overlayPath, overlayBefore);
   }
+  const iconPath = join(directory, 'plugin/assets/icon.png');
+  const iconBefore = await readFile(iconPath);
+  const invalidIcon = Buffer.alloc(24);
+  invalidIcon.write('PNG', 1);
+  invalidIcon.writeUInt32BE(48, 16);
+  invalidIcon.writeUInt32BE(48, 20);
+  await writeFile(iconPath, invalidIcon);
+  await assert.rejects(check(), error => error.code === 1);
+  await writeFile(iconPath, iconBefore);
+  for (const corrupt of [
+    icon => { icon[0] = 0; },
+    icon => { icon.writeUInt32BE(12, 8); },
+    icon => { icon.write('BAD!', 12); },
+    icon => { icon[icon.length - 1] = 0; }
+  ]) {
+    const icon = Buffer.from(iconBefore);
+    corrupt(icon);
+    await writeFile(iconPath, icon);
+    await assert.rejects(check(), error => error.code === 1);
+  }
+  await writeFile(iconPath, iconBefore);
+
+  // A junction also exercises real-path containment on Windows without symlink privileges.
+  const skillsPath = join(directory, 'plugin/skills');
+  const outsideSkills = join(directory, 'outside-skills');
+  await rename(skillsPath, outsideSkills);
+  await symlink(outsideSkills, skillsPath, process.platform === 'win32' ? 'junction' : 'dir');
+  await assert.rejects(check(), error => error.code === 1);
 });
