@@ -1,6 +1,6 @@
 # Multi-tab session acceptance matrix — Penpot MCP
 
-The selector-capable matrix below remains unverified. [2026-10-13 live acceptance](issue-4-5-acceptance.md) exercised the current selector-free SaaS on the actual Codex desktop engine, including different-file and same-file safe refusals, reload recovery and explicit-target exports. It does not establish atomic multi-tab routing or support for optional `sessionId`.
+The selector-capable matrix below remains unverified, so #5 remains open. [2026-10-13 live checks](issue-4-5-acceptance.md) exercised the current selector-free SaaS on the actual Codex desktop engine, including different-file and same-file safe refusals, reload recovery and explicit-target exports. They do not establish intended-tab multi-session read/write/read-back/export, atomic multi-tab routing or support for optional `sessionId`.
 
 1. Read the actual schemas of `execute_code` and `export_shape`. Record support/absence of `sessionId` for each independently, and compare each result with the tools the scenario actually invokes; support in one tool does not imply support in the other. `high_level_overview` and `penpot_api_info` are documentation calls and do not select a design.
 2. Create **two disposable Penpot files** A and B and connect both browser tabs. Capture the server-reported IDs when supported; never guess ID-to-file mapping.

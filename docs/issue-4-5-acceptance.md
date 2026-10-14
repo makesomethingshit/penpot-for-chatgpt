@@ -1,6 +1,6 @@
 # Host and session acceptance — 2026-10-13
 
-Acceptance for #4 and #5 was exercised on Windows x64, OpenAI Codex desktop package `26.1007.2314.0`, with its actual `codex.exe` app-server `0.162.0-alpha.17.2` and Node `24.18.0`. The tested plugin code commit is `f08b3758849caea437290992c1be12832f0c3830`. These are deterministic host API calls, not model-generated replay or tests of every ChatGPT host.
+Installation acceptance for #4 and the selector-free safe-refusal subset of #5 were exercised on Windows x64, OpenAI Codex desktop package `26.1007.2314.0`, with its actual `codex.exe` app-server `0.162.0-alpha.17.2` and Node `24.18.0`. The tested plugin code commit is `f08b3758849caea437290992c1be12832f0c3830`. These are deterministic host API calls, not model-generated replay or tests of every ChatGPT host. #5 remains open: its intended-tab multi-session read/write/read-back/export criterion is not established by this run.
 
 ## Installation and external requirements (#4)
 
@@ -43,7 +43,7 @@ Two new disposable files A/B were created; A1/A2 were separate browser tabs show
 | Reselect original A1 after fresh verification | Installed host performed authorized rename, same-ID read-back and explicit-ID PNG export; preview inspected | PASS |
 | Simultaneous explicitly routed tabs, atomic legacy exports, or partial selectors | This server exposes no selectors; partial-selector policy has automated coverage only | UNSUPPORTED / NOT RUN live |
 
-This closes the scoped workflow and supported-host acceptance gaps through correct operation or safe refusal. It does **not** establish atomic multi-tab isolation, add session management, or make unsupported exports safe. A failed guard never triggers an unscoped retry/export. Read-only fixtures and screenshots were retained locally; account URLs, tokens, screenshots and private design contents were not committed.
+This completes #4's recorded installation acceptance and verifies correct operation or safe refusal on the current selector-free host. It does **not** complete #5's multi-session acceptance, establish atomic multi-tab isolation, add session management, or make unsupported exports safe. A failed guard never triggers an unscoped retry/export. Read-only fixtures and screenshots were retained locally; account URLs, tokens, screenshots and private design contents were not committed.
 
 Reproduction: install the local marketplace into a separate host profile; start the actual desktop app-server and initialize its protocol; call `plugin/read`, `skills/list`, ephemeral `thread/start`, `mcpServerStatus/list`, then `mcpServer/tool/call` for overview/read. Use the shared mutation/recovery examples against disposable files only, explicitly switch MCP ownership in the browser, check rejected writes before re-inspection, and compare the untouched fixture afterward. Local evidence includes sanitized host results, routing results, before-fix failures, installed hashes and inspected PNG output.
 
