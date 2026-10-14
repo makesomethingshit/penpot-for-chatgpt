@@ -14,6 +14,7 @@ let local;
 let output;
 let diagnostics;
 let stopping = false;
+let getResponseChannelExhausted = false;
 let initializeRequestId;
 const requestOwners = new Map();
 // SDK stream readers and reconnect timers inherit the send context. Initial GETs
@@ -49,6 +50,15 @@ async function stop() {
   await Promise.allSettled([remote?.close(), local?.close()]);
 }
 
+function failOwner(owner, message) {
+  for (const [id, currentOwner] of [...requestOwners]) {
+    if (currentOwner !== owner) continue;
+    owner.cancelled = true;
+    failPendingRequest(id, message, owner);
+  }
+  owner.controller.abort();
+}
+
 function resourceLimit() {
   if (!stopping) {
     process.exitCode = 1;
@@ -82,6 +92,16 @@ async function boundedFetch(input, init) {
   const response = init.method === 'POST'
     ? await fetchWithHeaderDeadline(fetch, input, options)
     : await fetch(input, options);
+  if (init.method === 'POST' && response.status === 202 && owner) {
+    owner.getDependent = true;
+    if (getResponseChannelExhausted) {
+      // The mutation may already be accepted; fail closed instead of waiting on dead GET-SSE.
+      await Promise.resolve(response.body?.cancel()).catch(() => {});
+      return new Response(JSON.stringify({ jsonrpc: '2.0', id: requestId,
+        error: { code: -32000, message: 'Penpot response channel unavailable. Remote outcome unknown; inspect the intended file before retrying.' }
+      }), { headers: { 'content-type': 'application/json' } });
+    }
+  }
   if (!response.body) return response;
   const sse = response.ok && mediaTypeEssence(response.headers.get('content-type')) === 'text/event-stream';
   let bytes = 0;
@@ -205,7 +225,25 @@ if (url) try {
     }
     writeOutput(output, serializeMessage(message));
   };
-  remote.onerror = () => {
+  remote.onerror = error => {
+    // SDK 1.32.1 stops trying GET-SSE after its configured reconnection budget.
+    // A POST may already have committed remotely even though its reply is lost.
+    // Fail only the exhausted route; never replay potentially committed edits.
+    // shortcut: pinned SDK error text and async ownership, revisit when upgrading the transport.
+    if (!stopping && /^Maximum reconnection attempts \(\d+\) exceeded\.$/.test(error?.message ?? '')) {
+      const message = 'Penpot response channel disconnected. Remote outcome unknown; inspect the file after restarting the connection before retrying.';
+      const owner = requestContext.getStore();
+      if (owner) {
+        failOwner(owner, message);
+      } else {
+        getResponseChannelExhausted = true;
+        for (const dependent of new Set([...requestOwners.values()].filter(owner => owner.getDependent))) {
+          failOwner(dependent, message);
+        }
+      }
+      writeOutput(diagnostics, 'Penpot SSE response channel exhausted reconnection attempts. Restart the MCP connection and inspect the intended file before retrying.\n');
+      return;
+    }
     writeOutput(diagnostics, 'Penpot connection error. Check the local MCP URL, key validity, and active Penpot tab.\n');
   };
   local.onerror = () => {
