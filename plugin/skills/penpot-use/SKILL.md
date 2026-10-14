@@ -146,6 +146,10 @@ if (!Object.hasOwn(sessionIdSupport, currentInvokedTool) || !invokedTools.includ
 const sessionInventoryKnown = false; // false = unavailable; true + [] = known empty.
 const reportedIds = []; // Only IDs explicitly reported by Penpot or chosen by the user.
 const chosenId = undefined; // Explicit user/session choice when supported.
+if (!Array.isArray(reportedIds) || reportedIds.some(id => typeof id !== "string" || !id.trim()) ||
+    (chosenId !== undefined && (typeof chosenId !== "string" || !chosenId.trim()))) {
+  throw new Error("Penpot session IDs must be nonempty strings; use only reported or explicitly selected IDs.");
+}
 const readOnlyDiscovery = false; // Initial ambiguity check or explicitly routed/confirmed recovery read only.
 const routingState = { initialDiscoveryAttempted: false }; // Reuse the SAME object in agent task context across calls; initialize once.
 const freshExportReadBack = false; // True only for the immediately following guarded export of the same pinned target.

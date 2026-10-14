@@ -1,6 +1,6 @@
 # Multi-tab session acceptance matrix — Penpot MCP
 
-This is a **pending live-host test**, not evidence that current ChatGPT desktop supports optional `sessionId`.
+The selector-capable matrix below remains unverified, so #5 remains open. [2026-10-13 live checks](issue-4-5-acceptance.md) exercised the current selector-free SaaS on the actual Codex desktop engine, including different-file and same-file safe refusals, reload recovery and explicit-target exports. They do not establish intended-tab multi-session read/write/read-back/export, atomic multi-tab routing or support for optional `sessionId`.
 
 1. Read the actual schemas of `execute_code` and `export_shape`. Record support/absence of `sessionId` for each independently, and compare each result with the tools the scenario actually invokes; support in one tool does not imply support in the other. `high_level_overview` and `penpot_api_info` are documentation calls and do not select a design.
 2. Create **two disposable Penpot files** A and B and connect both browser tabs. Capture the server-reported IDs when supported; never guess ID-to-file mapping.
@@ -23,9 +23,9 @@ This is a **pending live-host test**, not evidence that current ChatGPT desktop 
 | Two tabs, no selector exposed | Do not authorize ambiguous write/export | Documented fail-closed policy |
 | Two tabs same file/page | Must not infer session from identical file/page IDs | Unverified |
 
-The checked-in preflight JS example in `penpot-use/SKILL.md` is covered by a synthetic test. It is not a new session API and cannot force a host without `sessionId` to provide atomic routing. Keep issue #5 open until the real acceptance matrix is run.
+The checked-in preflight JS example in `penpot-use/SKILL.md` is covered by a synthetic test. It is not a new session API and cannot force a host without `sessionId` to provide atomic routing. The live acceptance linked above records correct operation or safe refusal for the current host; unsupported simultaneous routing must not be marked as a successful isolation test.
 
-Reload recovery uses the confirmed replacement session ID for the pending read, verifies the original file/page/targets, and resumes writes/exports only after successful verification. `test/session-routing-policy.test.mjs` covers that transition, actionable unknown-inventory retry, independent tool selectors, same-file ambiguity and blocked writes before recovery inspection. Live ChatGPT multi-tab acceptance remains unverified; #5 stays open.
+Reload recovery uses the confirmed replacement session ID when supported, verifies the original file/page/targets, and resumes writes/exports only after successful verification. `test/session-routing-policy.test.mjs` covers that transition, actionable unknown-inventory retry, independent tool selectors, same-file ambiguity and blocked writes before recovery inspection. The current legacy-host recovery and refusal paths were also exercised live as linked above; routed multi-session acceptance remains unsupported on that server.
 
 
 Latest guard regressions: selector-free legacy reload can restore the original saved IDs only after explicit intended-singleton confirmation/re-selection; restoration never captures a new selection. Unrouted exports require an immediately preceding guarded target read-back and singleton evidence, including when execute_code retains its own selector. Initial unpinned read discovery consumes a task-scoped allowance before calling Penpot; repeated or interrupted unscoped discovery is rejected. Explicit routes and confirmed recovery reads remain available. These are executable policy tests, not proof of atomic routing in a live ChatGPT host.

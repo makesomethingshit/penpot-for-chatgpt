@@ -1,5 +1,7 @@
 # Host compatibility evidence
 
+Latest supported-host acceptance and fixes: [2026-10-13 issue #4/#5 verification](issue-4-5-acceptance.md). The older evidence below is retained as history; the latest check covers automatic startup through a fresh actual desktop-engine process, while GUI archive import and other host versions remain unverified.
+
 Checked 2026-10-11. Target formats: Agent Plugins 1.0.0 portable manifests and the existing Codex compatibility overlay. No release/version change is included.
 
 `npm run check` now compiles the externally published JSON Schemas for portable `plugin.json` and `mcp.json`, using the already locked SDK dependency Ajv 8.20.0 resolved from the SDK package (including nested npm layouts). Offline schema snapshots are unchanged downloads from:
@@ -23,7 +25,7 @@ The actual installed desktop executable's app-server returned all five enabled s
 
 A direct SDK smoke check launched the installed MCP manifest's `node`, args and cwd after `${PLUGIN_ROOT}` substitution. Initialization and tool discovery succeeded; all four live SaaS schemas lacked `sessionId`. A read-only `execute_code` via this installed bridge confirmed access to the same fixture file/page. This proves the installed bridge launcher works; automatic plugin MCP startup inside a newly started desktop chat and archive import are not separately exercised.
 
-The bundled bridge was built and its initialization/tool forwarding tested locally; Linux/macOS and final-SHA GitHub CI were not run locally. Both checked-in MCP formats use `node`, `${PLUGIN_ROOT}/server/bridge.mjs` and cwd `${PLUGIN_ROOT}`; no new endpoint, credential, launcher or capabilities are introduced. Issue #4 remains open for the deliberate unversioned overlay limitation and untested archive-import/automatic desktop-MCP lifecycle paths. Local installation, host skill/MCP discovery and installed bridge live access passed.
+The bundled bridge was built and its initialization/tool forwarding tested locally; Linux/macOS and final-SHA GitHub CI were not run locally in this initial check. Both checked-in MCP formats use `node`, `${PLUGIN_ROOT}/server/bridge.mjs` and cwd `${PLUGIN_ROOT}`; no new endpoint, credential, launcher or capabilities were introduced. At that time issue #4 remained open for the deliberate unversioned overlay limitation and untested archive-import/automatic desktop-MCP lifecycle paths. Local installation, host skill/MCP discovery and installed bridge live access passed; the later supported-host lifecycle check is linked above.
 
 ## Stdio host receive-buffer boundary (SDK 1.32.1)
 
