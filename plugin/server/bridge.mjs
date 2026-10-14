@@ -10040,7 +10040,7 @@ var local;
 var output;
 var diagnostics;
 var stopping = false;
-var sseResponseChannelExhausted = false;
+var getResponseChannelExhausted = false;
 var initializeRequestId;
 var requestOwners = /* @__PURE__ */ new Map();
 var requestContext = new AsyncLocalStorage();
@@ -10072,6 +10072,14 @@ async function stop() {
   requestOwners.clear();
   await Promise.allSettled([remote?.close(), local?.close()]);
 }
+function failOwner(owner, message) {
+  for (const [id, currentOwner] of [...requestOwners]) {
+    if (currentOwner !== owner) continue;
+    owner.cancelled = true;
+    failPendingRequest(id, message, owner);
+  }
+  owner.controller.abort();
+}
 function resourceLimit() {
   if (!stopping) {
     process.exitCode = 1;
@@ -10099,6 +10107,18 @@ async function boundedFetch(input, init) {
     throw new DOMException("Request was cancelled", "AbortError");
   }
   const response = init.method === "POST" ? await fetchWithHeaderDeadline(fetch, input, options) : await fetch(input, options);
+  if (init.method === "POST" && response.status === 202 && owner) {
+    owner.getDependent = true;
+    if (getResponseChannelExhausted) {
+      await Promise.resolve(response.body?.cancel()).catch(() => {
+      });
+      return new Response(JSON.stringify({
+        jsonrpc: "2.0",
+        id: requestId,
+        error: { code: -32e3, message: "Penpot response channel unavailable. Remote outcome unknown; inspect the intended file before retrying." }
+      }), { headers: { "content-type": "application/json" } });
+    }
+  }
   if (!response.body) return response;
   const sse = response.ok && mediaTypeEssence(response.headers.get("content-type")) === "text/event-stream";
   let bytes = 0;
@@ -10227,11 +10247,15 @@ if (url2) try {
   };
   remote.onerror = (error2) => {
     if (!stopping && /^Maximum reconnection attempts \(\d+\) exceeded\.$/.test(error2?.message ?? "")) {
-      sseResponseChannelExhausted = true;
-      for (const [id, owner] of [...requestOwners]) {
-        failPendingRequest(id, "Penpot response channel disconnected. Remote outcome unknown; inspect the file after restarting the connection before retrying.", owner);
-        owner.cancelled = true;
-        owner.controller.abort();
+      const message = "Penpot response channel disconnected. Remote outcome unknown; inspect the file after restarting the connection before retrying.";
+      const owner = requestContext.getStore();
+      if (owner) {
+        failOwner(owner, message);
+      } else {
+        getResponseChannelExhausted = true;
+        for (const dependent of new Set([...requestOwners.values()].filter((owner2) => owner2.getDependent))) {
+          failOwner(dependent, message);
+        }
       }
       writeOutput(diagnostics, "Penpot SSE response channel exhausted reconnection attempts. Restart the MCP connection and inspect the intended file before retrying.\n");
       return;
@@ -10251,14 +10275,6 @@ if (url2) try {
   };
   local.onmessage = (message) => {
     const requestId = requestIdOfMessage(message);
-    if (sseResponseChannelExhausted) {
-      if (requestId !== void 0) writeOutput(output, serializeMessage({
-        jsonrpc: "2.0",
-        id: requestId,
-        error: { code: -32e3, message: "Penpot response channel unavailable. Remote outcome unknown; restart the MCP connection and inspect the intended file before retrying." }
-      }));
-      return;
-    }
     const requestOwner = requestId === void 0 ? void 0 : { controller: new AbortController(), cancelled: false };
     if (requestOwner) requestOwners.set(requestId, requestOwner);
     if (message.method === "notifications/cancelled") {
