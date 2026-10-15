@@ -61,6 +61,14 @@ globalThis.fetch = async (_, init) => {
     cancel() { clearTimeout(timer); }
   }), { headers: { 'content-type': 'text/event-stream' } });
   }
+  if (mode === 'terminate-race') return {
+    ok: true, status: 200, headers: new Headers({ 'content-type': 'application/json' }), body: null,
+    json: async () => {
+      await new Promise(resolve => setTimeout(resolve, 80));
+      process.stderr.write('late-json:' + message.id + '\\n');
+      return { jsonrpc: '2.0', id: message.id, result: { value: 'late' } };
+    }
+  };
   if (mode === 'healthy') return new Promise(resolve => setTimeout(() =>
     resolve(response(message, { value: 'healthy' })), 100));
   if (mode === 'shutdown') return new Promise((_, reject) => {
@@ -230,5 +238,18 @@ test('bridge shutdown clears pending and aborts an in-flight fetch', { timeout: 
   assert.equal(await f.close(), 0);
   await f.waitForText('aborted:20');
   assert.equal(f.messages.filter(message => message.id === 20).length, 0);
+  assert.ok(!f.diagnostics().includes(token));
+});
+
+test('cancellation racing host shutdown suppresses a late terminal response', { timeout: 10000 }, async t => {
+  const f = runtime(t);
+  await f.ready();
+  f.send(request(30, 'terminate-race'));
+  await f.waitForText('started:30:terminate-race');
+  f.send({ jsonrpc: '2.0', method: 'notifications/cancelled', params: { requestId: 30 } });
+  f.child.stdin.end();
+  assert.equal(await f.close(), 0);
+  await f.waitForText('late-json:30');
+  assert.equal(f.messages.filter(message => message.id === 30).length, 0);
   assert.ok(!f.diagnostics().includes(token));
 });

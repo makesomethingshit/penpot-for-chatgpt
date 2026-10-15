@@ -209,6 +209,8 @@ if (url) try {
     if (Object.hasOwn(message, 'id') && terminal) {
       const owner = requestOwners.get(message.id);
       if (!owner || owner.cancelled) return;
+      const sourceOwner = requestContext.getStore();
+      if (sourceOwner && sourceOwner !== owner) return;
       requestOwners.delete(message.id);
     }
     // Only the matching initialize response is allowed to negotiate HTTP protocol headers.

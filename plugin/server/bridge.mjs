@@ -10229,6 +10229,8 @@ if (url2) try {
     if (Object.hasOwn(message, "id") && terminal) {
       const owner = requestOwners.get(message.id);
       if (!owner || owner.cancelled) return;
+      const sourceOwner = requestContext.getStore();
+      if (sourceOwner && sourceOwner !== owner) return;
       requestOwners.delete(message.id);
     }
     if (initializeRequestId !== void 0 && message.id === initializeRequestId) {
