@@ -9,6 +9,8 @@ Apply this workflow before every Penpot task. This desktop package includes a lo
 
 ## Connect and establish the target
 
+For a first connection, credential status, key rotation, or local disconnect, use the packaged `node scripts/penpot-account.mjs connect|status|disconnect` instructions. `status` validates local configuration only; do not claim remote login or an active design until official MCP tools and a read-only file inspection succeed. Never ask the user to paste an MCP token into chat.
+
 1. Discover the connected official Penpot tools. Use the registered remote server for `design.penpot.app` by default. The usual tools are `high_level_overview`, `penpot_api_info`, `execute_code` and `export_shape`; the host's prefix may vary. Do not invent a `use_penpot` tool or substitute a similarly named third-party server. If tools are absent, distinguish the desktop plugin's missing runtime/startup from unconfigured credentials and from a disconnected Penpot file. Use the package README and [official setup guide](https://help.penpot.app/mcp/). Do not assume reinstalling or a new conversation will solve an unconfigured connection. Never request or embed an MCP key or personal server URL in chat, code or artifacts.
 2. Establish session routing using the live tool schemas as described below. Keep the chosen MCP server and session fixed across inspection, writes, verification and exports.
 3. Read `high_level_overview` once per session, before executing code. Read `penpot_api_info` for the specific types and members needed; runtime documentation takes precedence over remembered APIs. Do not infer design-file access from successful documentation retrieval.
