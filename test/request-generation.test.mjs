@@ -7,6 +7,8 @@ import test from 'node:test';
 const mock = `
 const encode = text => new TextEncoder().encode(text);
 let oldStream;
+let oldRequestId;
+let rejectOld;
 let activeGet;
 let posts = 0;
 let resumes = 0;
@@ -33,9 +35,15 @@ globalThis.fetch = async (_, init) => {
  if(m.method==='initialize') return json(m,{protocolVersion:'2025-03-26',capabilities:{},serverInfo:{name:'generation',version:'1'}});
  if(m.method==='') return new Response(JSON.stringify({jsonrpc:'2.0',id:m.id,error:{code:-32601,message:'Method not found'}}),{headers:{'content-type':'application/json'}});
  const mode=m.params?.mode;
- if(mode==='old') return new Response(new ReadableStream({start(c){oldStream=c;c.enqueue(encode(event({jsonrpc:'2.0',id:m.id,result:{value:'old'}})));}}),{headers:{'content-type':'text/event-stream'}});
+ if(mode==='reject') throw new Error('synthetic request rejection');
+ if(mode==='old-reject') return new Promise((_,reject)=>{rejectOld=reject;process.stderr.write('old-pending\\n');});
+ if(mode==='reuse-reject') {rejectOld(new Error('delayed old failure'));await new Promise(r=>setTimeout(r,60));return json(m,{value:'new'});}
+ if(mode==='old') return new Response(new ReadableStream({start(c){oldStream=c;oldRequestId=m.id;c.enqueue(encode(event({jsonrpc:'2.0',id:m.id,result:{value:'old'}})));}}),{headers:{'content-type':'text/event-stream'}});
  if(mode==='new') {
-  if(process.env.CASE==='error') oldStream.error(new Error('old stream failed')); else oldStream.close();
+   if(process.env.CASE==='late') {
+    await new Promise(r=>setTimeout(r,20));
+    oldStream.enqueue(encode(event({jsonrpc:'2.0',id:oldRequestId,result:{value:'old-late'}})));
+   } else if(process.env.CASE==='error') oldStream.error(new Error('old stream failed')); else oldStream.close();
   await new Promise(r=>setTimeout(r,60));
   return json(m,{value:'new'});
  }
@@ -72,9 +80,47 @@ for(const ending of ['eof','error']) test('old SSE '+ending+' cannot retire a re
  assert.deepEqual(f.messages.filter(m=>m.id===2),[{jsonrpc:'2.0',id:2,result:{value:'old'}},{jsonrpc:'2.0',id:2,result:{value:'new'}}]);
  await f.close();
 });
+test('late terminal events cannot retire a reused request ID',{timeout:15000},async t=>{
+ const f=runtime(t,'late');await f.ready();f.send(2,'tools/call',{mode:'old'});await f.wait(()=>f.messages.some(m=>m.id===2));
+ f.send(2,'tools/call',{mode:'new'});await f.wait(()=>f.messages.filter(m=>m.id===2).length>=2);
+ await new Promise(r=>setTimeout(r,80));
+ assert.deepEqual(f.messages.filter(m=>m.id===2),[{jsonrpc:'2.0',id:2,result:{value:'old'}},{jsonrpc:'2.0',id:2,result:{value:'new'}}]);
+ await f.close();
+});
 test('empty string method forwards exactly one terminal error',{timeout:15000},async t=>{
  const f=runtime(t,'empty');await f.ready();f.send(3,'',{});await f.wait(()=>f.messages.some(m=>m.id===3));
  await new Promise(r=>setTimeout(r,50));assert.deepEqual(f.messages.filter(m=>m.id===3),[{jsonrpc:'2.0',id:3,error:{code:-32601,message:'Method not found'}}]);await f.close();
+});
+test('late send rejection cannot fail a newer owner of zero or string IDs', {timeout:15000}, async t=>{
+ for (const id of [0,'','request-a']) {
+  const f=runtime(t,'reject-reuse');await f.ready();
+  f.send(id,'tools/call',{mode:'old-reject'});await f.wait(()=>f.stderr().includes('old-pending'));
+  f.send(id,'tools/call',{mode:'reuse-reject'});await f.wait(()=>f.messages.some(m=>m.id===id));
+  assert.deepEqual(f.messages.filter(m=>m.id===id),[{jsonrpc:'2.0',id,result:{value:'new'}}]);
+  assert.ok(!f.stderr().includes('delayed old failure'));await f.close();
+ }
+});
+
+test('failed requests preserve zero and string IDs and allow reuse', { timeout: 15000 }, async t => {
+ const f = runtime(t, 'reject');
+ await f.ready();
+ for (const id of [0, '', 'request-a']) {
+  f.send(id, 'tools/call', { mode: 'reject' });
+  await f.wait(() => f.messages.some(message => message.id === id));
+  assert.deepEqual(f.messages.find(message => message.id === id), {
+   jsonrpc: '2.0', id, error: {
+    code: -32000,
+    message: 'Penpot connection failed. Remote outcome unknown; inspect the intended file before retrying.'
+   }
+  });
+  f.send(id, 'tools/call', { mode: 'healthy' });
+  await f.wait(() => f.messages.filter(message => message.id === id).length >= 2);
+  assert.equal(f.messages.filter(message => message.id === id)[1].result.value, 'healthy');
+ }
+ await new Promise(resolve => setTimeout(resolve, 50));
+ for (const id of [0, '', 'request-a']) assert.equal(f.messages.filter(message => message.id === id).length, 2);
+ assert.ok(!f.stderr().includes('synthetic request rejection'));
+ await f.close();
 });
 
 for(const mode of ['post','resumed']) test('cancelled resumable '+mode+' stops owned reconnects and preserves unrelated GET',{timeout:15000},async t=>{
