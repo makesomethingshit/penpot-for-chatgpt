@@ -64,19 +64,45 @@ test('disconnect requires exact confirmation, preserves refusal and removes only
   const { home, file } = await sandbox(t);
   const original = process.platform === 'win32' ? '{"dpapi":"synthetic"}' : JSON.stringify({ url });
   await writeFile(file, original, { mode: 0o600 });
-  const refused = await invoke(home, 'disconnect', 'CANCEL\n');
-  assert.equal(refused.code, 0);
-  assert.match(refused.stdout, /Cancelled/);
-  assert.equal(await readFile(file, 'utf8'), original);
+  for (const input of ['CANCEL\n', ' DISCONNECT \n', '\n']) {
+    const refused = await invoke(home, 'disconnect', input);
+    assert.equal(refused.code, 0);
+    assert.match(refused.stdout, /Cancelled/);
+    assert.equal(await readFile(file, 'utf8'), original);
+  }
   const removed = await invoke(home, 'disconnect', 'DISCONNECT\n');
   assert.equal(removed.code, 0);
   await assert.rejects(readFile(file, 'utf8'), { code: 'ENOENT' });
   assert.match(removed.stdout, /remote token separately/);
+  assert.match(removed.stdout, /final check and deletion are not atomic/);
   assert.ok(!removed.stdout.includes(secret));
   const nofile = await invoke(home, 'disconnect', 'DISCONNECT\n');
   assert.equal(nofile.code, 0);
   assert.match(nofile.stdout, /No saved local connection/);
 });
+test('status reports missing and damaged credentials without changing or exposing them', async t => {
+  const { home, file } = await sandbox(t);
+  const missing = await invoke(home, 'status');
+  assert.equal(missing.code, 1);
+  assert.match(missing.stdout, /connection is missing/);
+  const damaged = '{' + secret;
+  await writeFile(file, damaged, { mode: 0o600 });
+  const result = await invoke(home, 'status');
+  assert.equal(result.code, 1);
+  assert.match(result.stdout, /file is damaged/);
+  assert.equal(await readFile(file, 'utf8'), damaged);
+  assert.ok(!(result.stdout + result.stderr).includes(secret));
+});
+
+test('disconnect preserves the credential when confirmation input ends', { timeout: 10000 }, async t => {
+  const { home, file } = await sandbox(t);
+  await writeFile(file, secret, { mode: 0o600 });
+  const result = await invoke(home, 'disconnect');
+  assert.notEqual(result.code, 0);
+  assert.equal(await readFile(file, 'utf8'), secret);
+  assert.ok(!(result.stdout + result.stderr).includes(secret));
+});
+
 test('disconnect rejects symlink file and preserves its target', { skip: process.platform === 'win32' }, async t => {
   const { home, file } = await sandbox(t);
   const outside = join(home, 'outside.json');
@@ -106,36 +132,46 @@ test('explicit environment override remains after local removal and is not false
 });
 
 
-test('disconnect preserves a replacement credential created while awaiting confirmation', { timeout: 10000 }, async t => {
-  const { home, file } = await sandbox(t);
-  const original = '{"dpapi":"original"}';
-  const replacement = '{"dpapi":"replacement"}';
-  await writeFile(file, original, { mode: 0o600 });
-  const env = { ...process.env, HOME: home, USERPROFILE: home };
-  delete env.PENPOT_MCP_URL;
-  const child = spawn(process.execPath, [program, 'disconnect'], { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
-  t.after(() => child.kill());
-  let stdout = '', stderr = '';
-  child.stdout.setEncoding('utf8');
-  child.stderr.on('data', data => { stderr += data; });
-  const done = new Promise((resolveResult, reject) => {
-    child.once('error', reject);
-    child.once('close', code => resolveResult(code));
+for (const change of ['replace', 'rewrite', 'directory']) {
+  test('disconnect preserves credential after ' + change + ' while awaiting confirmation', { timeout: 10000 }, async t => {
+    const { home, file } = await sandbox(t);
+    const original = '{"dpapi":"original"}';
+    const replacement = '{"dpapi":"replacement"}';
+    await writeFile(file, original, { mode: 0o600 });
+    const env = { ...process.env, HOME: home, USERPROFILE: home };
+    delete env.PENPOT_MCP_URL;
+    const child = spawn(process.execPath, [program, 'disconnect'], { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+    t.after(() => child.kill());
+    let stdout = '', stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stderr.on('data', data => { stderr += data; });
+    const done = new Promise((resolveResult, reject) => {
+      child.once('error', reject);
+      child.once('close', code => resolveResult(code));
+    });
+    for await (const chunk of child.stdout) {
+      stdout += chunk;
+      if (!stdout.includes('Confirm: ')) continue;
+      if (change === 'directory') {
+        await rename(join(home, '.penpot-for-chatgpt'), join(home, 'original-directory'));
+        await mkdir(join(home, '.penpot-for-chatgpt'), { mode: 0o700 });
+      } else if (change === 'replace') {
+        await rename(file, file + '.original');
+      }
+      await writeFile(file, replacement, { mode: 0o600 });
+      child.stdin.end('DISCONNECT\n');
+      break;
+    }
+    assert.equal(await done, 1);
+    assert.match(stdout, /Confirm: /);
+    assert.match(stderr, /Connection operation stopped/);
+    assert.equal(await readFile(file, 'utf8'), replacement);
+    if (change === 'replace') assert.equal(await readFile(file + '.original', 'utf8'), original);
+    if (change === 'directory') {
+      assert.equal(await readFile(join(home, 'original-directory', 'connection.json'), 'utf8'), original);
+    }
   });
-  for await (const chunk of child.stdout) {
-    stdout += chunk;
-    if (!stdout.includes('Confirm: ')) continue;
-    await rename(file, file + '.original');
-    await writeFile(file, replacement, { mode: 0o600 });
-    child.stdin.end('DISCONNECT\n');
-    break;
-  }
-  assert.equal(await done, 1);
-  assert.match(stdout, /Confirm: /);
-  assert.match(stderr, /Connection operation stopped/);
-  assert.equal(await readFile(file, 'utf8'), replacement);
-  assert.equal(await readFile(file + '.original', 'utf8'), original);
-});
+}
 
 test('Windows account status reads real DPAPI credentials before local disconnect', {
   skip: process.platform !== 'win32', timeout: 30000

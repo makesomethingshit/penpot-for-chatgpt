@@ -23,7 +23,7 @@ function connect() {
     console.log('In the installed plugin directory run: powershell.exe -NoProfile -File ./scripts/penpot-setup.ps1');
     console.log('The existing setup uses hidden input and Windows DPAPI.');
   } else {
-    console.log('In the installed plugin directory use a hidden shell prompt:');
+    console.log('In the installed plugin directory use a hidden Bash prompt:');
     console.log("read -r -s -p 'MCP URL: ' PENPOT_MCP_URL; printf '\\n'");
     console.log('printf %s "$PENPOT_MCP_URL" | node scripts/penpot-setup.mjs; unset PENPOT_MCP_URL');
     console.log('The existing setup stores a 0600 user-only file (not a keychain).');
@@ -65,7 +65,10 @@ async function checked(path, isFile) {
   validate(info, isFile);
   return info;
 }
-function identical(a, b) { return a.dev === b.dev && a.ino === b.ino; }
+function identical(a, b) {
+  return a.dev === b.dev && a.ino === b.ino && a.size === b.size &&
+    a.mtimeMs === b.mtimeMs && a.ctimeMs === b.ctimeMs;
+}
 
 async function disconnect() {
   let directory, target;
@@ -79,11 +82,12 @@ async function disconnect() {
   }
   console.log('Only the saved credential file for this OS user will be deleted.');
   console.log('This does NOT revoke remote tokens, unset PENPOT_MCP_URL or stop the running MCP bridge.');
+  console.log('Do not run setup or rotate credentials concurrently: the final check and deletion are not atomic.');
   console.log('Type DISCONNECT to confirm. Anything else preserves the file.');
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   let confirmation;
   try { confirmation = await rl.question('Confirm: '); } finally { rl.close(); }
-  if (confirmation.trim() !== 'DISCONNECT') {
+  if (confirmation !== 'DISCONNECT') {
     console.log('Cancelled. Existing credential preserved.');
     return;
   }
