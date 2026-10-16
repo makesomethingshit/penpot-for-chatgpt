@@ -28,7 +28,7 @@ function connect() {
     console.log('printf %s "$PENPOT_MCP_URL" | node scripts/penpot-setup.mjs; unset PENPOT_MCP_URL');
     console.log('The existing setup stores a 0600 user-only file (not a keychain).');
   }
-  console.log('Run node scripts/penpot-account.mjs status to check local setup.');
+  console.log('In the installed plugin directory run: node scripts/penpot-account.mjs status to check local setup.');
   remoteSteps();
 }
 
@@ -87,7 +87,7 @@ async function disconnect() {
     console.log('Cancelled. Existing credential preserved.');
     return;
   }
-  // Recheck after confirmation; the user-only parent prevents unrelated users swapping paths.
+  // shortcut: recheck and unlink are not atomic; use OS-specific deletion if concurrent rotation must be supported.
   if (!identical(directory, await checked(folder, false)) ||
       !identical(target, await checked(file, true))) {
     throw new Error('Local connection path changed');
@@ -101,7 +101,7 @@ async function disconnect() {
 }
 
 if (!['connect', 'status', 'disconnect'].includes(command) || process.argv.length > 3) {
-  console.error('Usage: node scripts/penpot-account.mjs [connect|status|disconnect]');
+  console.error('Usage (installed plugin directory): node scripts/penpot-account.mjs [connect|status|disconnect]');
   process.exitCode = 1;
 } else {
   try {

@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
-import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { execFile, spawn } from 'node:child_process';
+import { chmod, lstat, mkdir, mkdtemp, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import test from 'node:test';
+import { promisify } from 'node:util';
 
 const secret = 'synthetic-connection-onboarding-token';
 const url = 'https://design.penpot.app/mcp/stream?userToken=' + secret;
@@ -37,6 +38,7 @@ test('connection guide uses existing secure setup, no secrets', async t => {
   assert.match(x.stdout, /official MCP URL/);
   assert.match(x.stdout, /not an OAuth sign-in/);
   assert.match(x.stdout, /read-only execute_code/);
+  assert.match(x.stdout, /In the installed plugin directory run: node scripts\/penpot-account\.mjs status/);
   assert.ok(!x.stdout.includes(secret));
 });
 test('status separates local credential from unverified remote and active tab', async t => {
@@ -101,4 +103,61 @@ test('explicit environment override remains after local removal and is not false
   assert.match(x.stdout, /Environment override still exists/);
   await assert.rejects(readFile(file), { code: 'ENOENT' });
   assert.ok(!x.stdout.includes(secret));
+});
+
+
+test('disconnect preserves a replacement credential created while awaiting confirmation', { timeout: 10000 }, async t => {
+  const { home, file } = await sandbox(t);
+  const original = '{"dpapi":"original"}';
+  const replacement = '{"dpapi":"replacement"}';
+  await writeFile(file, original, { mode: 0o600 });
+  const env = { ...process.env, HOME: home, USERPROFILE: home };
+  delete env.PENPOT_MCP_URL;
+  const child = spawn(process.execPath, [program, 'disconnect'], { env, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+  t.after(() => child.kill());
+  let stdout = '', stderr = '';
+  child.stdout.setEncoding('utf8');
+  child.stderr.on('data', data => { stderr += data; });
+  const done = new Promise((resolveResult, reject) => {
+    child.once('error', reject);
+    child.once('close', code => resolveResult(code));
+  });
+  for await (const chunk of child.stdout) {
+    stdout += chunk;
+    if (!stdout.includes('Confirm: ')) continue;
+    await rename(file, file + '.original');
+    await writeFile(file, replacement, { mode: 0o600 });
+    child.stdin.end('DISCONNECT\n');
+    break;
+  }
+  assert.equal(await done, 1);
+  assert.match(stdout, /Confirm: /);
+  assert.match(stderr, /Connection operation stopped/);
+  assert.equal(await readFile(file, 'utf8'), replacement);
+  assert.equal(await readFile(file + '.original', 'utf8'), original);
+});
+
+test('Windows account status reads real DPAPI credentials before local disconnect', {
+  skip: process.platform !== 'win32', timeout: 30000
+}, async t => {
+  const { home, file } = await sandbox(t);
+  const env = { ...process.env, USERPROFILE: home, PENPOT_TEST_URL: url,
+    PENPOT_TEST_SETUP: resolve('plugin/scripts/penpot-setup.ps1') };
+  delete env.PSModulePath;
+  delete env.PENPOT_MCP_URL;
+  const script = 'function Read-Host { param($Prompt, [switch]$AsSecureString) ConvertTo-SecureString $env:PENPOT_TEST_URL -AsPlainText -Force }; & $env:PENPOT_TEST_SETUP';
+  await promisify(execFile)('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], {
+    env, windowsHide: true, timeout: 10000
+  });
+  assert.ok(!(await readFile(file, 'utf8')).includes(secret));
+  const saved = await invoke(home, 'status');
+  assert.equal(saved.code, 0);
+  assert.match(saved.stdout, /VALID \(private user file\)/);
+  assert.ok(!saved.stdout.includes(secret) && !saved.stderr.includes(secret));
+  const removed = await invoke(home, 'disconnect', 'DISCONNECT\n');
+  assert.equal(removed.code, 0);
+  await assert.rejects(readFile(file), { code: 'ENOENT' });
+  const missing = await invoke(home, 'status');
+  assert.equal(missing.code, 1);
+  assert.match(missing.stdout, /connection is missing/);
 });
