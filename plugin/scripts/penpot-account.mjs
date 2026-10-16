@@ -11,13 +11,23 @@ const command = process.argv[2] ?? 'connect';
 function remoteSteps() {
   console.log('Remote MCP authentication/tool discovery: NOT CHECKED (desktop host required).');
   console.log('Active Penpot design file/tab: NOT CHECKED (read-only execute_code required).');
-  console.log('Verify the live tab from the desktop host with this read-only execute_code probe:');
-  console.log("const file = penpot.currentFile; const page = penpot.currentPage; if (!file || !page) throw new Error('No Penpot file/tab connected.'); return { fileId: file.id, fileName: file.name, pageId: page.id, pageName: page.name };");
   console.log('IDs returned: the tab is connected; compare them with the pinned task IDs before any write/export.');
   console.log('`No Penpot instance connected`: first reconnect the intended file via File > MCP Server > Connect and rerun the probe read-only.');
   console.log('If it persists after reconnecting the intended tab, the saved key may be stale (regenerating the MCP key revokes the old one): update the saved credential via the existing secure setup, then reconnect.');
   console.log('Reload the desktop MCP connection; connect the intended Penpot file via File > MCP Server > Connect.');
   console.log('Inspect the file/page read-only before any write/export. Local VALID covers URL structure only, not authentication.');
+  console.log('Before running the example: discover the connected official Penpot MCP tools and inspect their live schemas.');
+  console.log('Establish the intended session first. If execute_code supports sessionId, pass the established ID unchanged.');
+  console.log('Without sessionId, confirm exactly one intended tab is connected; stop on ambiguity or interrupted routing.');
+  console.log('Read high_level_overview once per session, then penpot_api_info for currentFile and currentPage before execute_code.');
+  console.log('Documentation retrieval alone does not verify access to a design file.');
+  console.log('Run this read-only execute_code probe with the verified official tool:');
+  console.log('```javascript');
+  console.log('const file = penpot.currentFile;');
+  console.log('const page = penpot.currentPage;');
+  console.log('if (!file || !page) throw new Error("Open the intended Penpot file and connect MCP.");');
+  console.log('return { file: { id: file.id, name: file.name }, page: { id: page.id, name: page.name } };');
+  console.log('```');
 }
 
 function connect() {
