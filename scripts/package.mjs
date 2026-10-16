@@ -12,7 +12,7 @@ const staging = await mkdtemp(resolve('dist/staging-'));
 const files = ['.codex-plugin/plugin.json', '.mcp.json', 'mcp.json', 'plugin.json', 'README.md',
   'assets/icon.png', 'assets/icon-dark.png', 'server/bridge-source.mjs', 'server/header-deadline.mjs', 'server/bridge.mjs',
   'server/build-info.json', 'server/THIRD_PARTY_NOTICES.txt', 'server/connection.mjs',
-  'scripts/penpot-setup.ps1', 'scripts/penpot-setup.mjs', 'scripts/validate-connection.mjs', 'scripts/penpot-doctor.mjs',
+  'scripts/penpot-setup.ps1', 'scripts/penpot-setup.mjs', 'scripts/validate-connection.mjs', 'scripts/penpot-doctor.mjs', 'scripts/penpot-account.mjs',
   ...(await readdir('plugin/skills')).map(skill => `skills/${skill}/SKILL.md`),
   'skills/penpot-design-system/references/build-from-code.md'];
 function tar(args) {
@@ -39,6 +39,13 @@ try {
     assert.deepEqual(await readFile(join(readback, name, file)), await readFile(join('plugin', file)),
       `Packaged content changed: ${file}`);
   }
+  const guide = spawnSync(process.execPath, ['scripts/penpot-account.mjs', 'connect'], {
+    cwd: join(readback, name), encoding: 'utf8', windowsHide: true
+  });
+  assert.ifError(guide.error);
+  assert.equal(guide.status, 0, guide.stderr);
+  assert.match(guide.stdout, /Remote MCP authentication\/tool discovery: NOT CHECKED/);
+  assert.match(guide.stdout, /Active Penpot design file\/tab: NOT CHECKED/);
   const digest = createHash('sha256').update(await readFile(archive)).digest('hex');
   await writeFile('dist/SHA256SUMS', `${digest}  ${filename}\n`);
   console.log(archive);

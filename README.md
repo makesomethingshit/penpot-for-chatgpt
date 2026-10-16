@@ -62,6 +62,20 @@ Open a successful [Check workflow run](https://github.com/makesomethingshit/penp
 
 Enable MCP under **Your account > Integrations > MCP Server** and copy the full server URL. Open a design file and choose **File > MCP Server > Connect**. Keep the browser tab awake. Follow the [official Penpot setup guide](https://help.penpot.app/mcp/) for the account and browser steps.
 
+### Guided account connection and local disconnect
+
+The packaged, offline CLI provides **guidance, local status, and explicit local disconnect**, not OAuth. From the repository root:
+
+- `npm run account -- connect`: walk through the official MCP URL and existing OS-specific secure setup (no token accepted on command line).
+- `npm run account -- status`: check Node.js, bundled bridge, and existing local connection config; **does not use the network**, validate authentication against Penpot, or inspect a design tab.
+- `npm run account -- disconnect`: asks you to type `DISCONNECT`, then removes only the current user's local saved config after safety checks. Does not revoke the remote token, close an existing MCP connection, or unset `PENPOT_MCP_URL`. Restart the host and revoke the token in Penpot separately when needed.
+
+From an installed or extracted plugin directory, use `node scripts/penpot-account.mjs connect`, `node scripts/penpot-account.mjs status`, or `node scripts/penpot-account.mjs disconnect` instead. The equivalent repository-root path is `node plugin/scripts/penpot-account.mjs` followed by the action.
+
+Disconnect rechecks file identity after confirmation, but the final check and deletion are not atomic. Avoid running setup/rotation concurrently with disconnect.
+
+Replace/rotate an MCP URL using the platform-specific setup scripts below. If the active tab disconnects while local credentials remain valid, **do not re-enter the key**: reconnect the intended Penpot tab and verify the original file/page/shape IDs read-only before any new edit or export. Do not interpret `status` success as a functioning remote login.
+
 ### Windows
 
 From this repository directory:
