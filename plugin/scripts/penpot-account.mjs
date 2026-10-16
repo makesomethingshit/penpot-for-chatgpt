@@ -13,6 +13,18 @@ function remoteSteps() {
   console.log('Active Penpot design file/tab: NOT CHECKED (read-only execute_code required).');
   console.log('Reload the desktop MCP connection; connect the intended Penpot file via File > MCP Server > Connect.');
   console.log('Inspect the file/page read-only before any write/export. A disconnected tab does not require a new token.');
+  console.log('Before running the example: discover the connected official Penpot MCP tools and inspect their live schemas.');
+  console.log('Establish the intended session first. If execute_code supports sessionId, pass the established ID unchanged.');
+  console.log('Without sessionId, confirm exactly one intended tab is connected; stop on ambiguity or interrupted routing.');
+  console.log('Read high_level_overview once per session, then penpot_api_info for currentFile and currentPage before execute_code.');
+  console.log('Documentation retrieval alone does not verify access to a design file.');
+  console.log('Run this read-only JavaScript body with the verified official execute_code tool:');
+  console.log('```javascript');
+  console.log('const file = penpot.currentFile;');
+  console.log('const page = penpot.currentPage;');
+  console.log('if (!file || !page) throw new Error("Open the intended Penpot file and connect MCP.");');
+  console.log('return { file: { id: file.id, name: file.name }, page: { id: page.id, name: page.name } };');
+  console.log('```');
 }
 
 function connect() {
