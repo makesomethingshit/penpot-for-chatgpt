@@ -11,6 +11,10 @@ const command = process.argv[2] ?? 'connect';
 function remoteSteps() {
   console.log('Remote MCP authentication/tool discovery: NOT CHECKED (desktop host required).');
   console.log('Active Penpot design file/tab: NOT CHECKED (read-only execute_code required).');
+  console.log('Verify the live tab from the desktop host with this read-only execute_code probe:');
+  console.log("const file = penpot.currentFile; const page = penpot.currentPage; if (!file || !page) throw new Error('No Penpot file/tab connected.'); return { fileId: file.id, fileName: file.name, pageId: page.id, pageName: page.name };");
+  console.log('IDs returned: the tab is connected; compare them with the pinned task IDs before any write/export.');
+  console.log('`No Penpot instance connected`: the design tab is disconnected while the local credential stays VALID; reconnect the intended file via File > MCP Server > Connect instead of re-entering the key.');
   console.log('Reload the desktop MCP connection; connect the intended Penpot file via File > MCP Server > Connect.');
   console.log('Inspect the file/page read-only before any write/export. A disconnected tab does not require a new token.');
 }
