@@ -31,11 +31,11 @@ Specialists follow `penpot-use`. Inspection/audit stays read-only; edits preserv
 
 The packaged, offline CLI provides **guidance, local status, and explicit local disconnect**, not OAuth:
 
-- \`node scripts/penpot-account.mjs connect\`: walk through the official MCP URL and existing OS-specific secure setup (no token accepted on command line).
-- \`node scripts/penpot-account.mjs status\`: check Node.js, bundled bridge, and existing local connection config; **does not use the network**, validate authentication against Penpot, or inspect a design tab.
-- \`node scripts/penpot-account.mjs disconnect\`: asks you to type \`DISCONNECT\`, then removes only the current user's local saved config after safety checks. Does not revoke the remote token, close an existing MCP connection, or unset \`PENPOT_MCP_URL\`. Restart the host and revoke the token in Penpot separately when needed.
+- `node scripts/penpot-account.mjs connect`: walk through the official MCP URL and existing OS-specific secure setup (no token accepted on command line).
+- `node scripts/penpot-account.mjs status`: check Node.js, bundled bridge, and existing local connection config; **does not use the network**, validate authentication against Penpot, or inspect a design tab.
+- `node scripts/penpot-account.mjs disconnect`: asks you to type `DISCONNECT`, then removes only the current user's local saved config after safety checks. Does not revoke the remote token, close an existing MCP connection, or unset `PENPOT_MCP_URL`. Restart the host and revoke the token in Penpot separately when needed.
 
-Replace/rotate an MCP URL using the existing setup script above. If the active tab disconnects while local credentials remain valid, **do not re-enter the key**: reconnect the intended Penpot tab and verify the original file/page/shape IDs read-only before any new edit or export. Do not interpret \`status\` success as a functioning remote login.
+Replace/rotate an MCP URL using the existing setup script above. If the active tab disconnects while local credentials remain valid, **do not re-enter the key**: reconnect the intended Penpot tab and verify the original file/page/shape IDs read-only before any new edit or export. Do not interpret `status` success as a functioning remote login.
 
 ## Read-only local diagnostic
 
