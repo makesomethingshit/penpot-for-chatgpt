@@ -1,6 +1,6 @@
-# Multi-tab session acceptance matrix — Penpot MCP
+# Multi-tab session compatibility matrix — Penpot MCP
 
-The selector-capable matrix below remains unverified, so #5 remains open. [2026-10-13 live checks](issue-4-5-acceptance.md) exercised the current selector-free SaaS on the actual Codex desktop engine, including different-file and same-file safe refusals, reload recovery and explicit-target exports. They do not establish intended-tab multi-session read/write/read-back/export, atomic multi-tab routing or support for optional `sessionId`.
+**Historical and future compatibility coverage; not the revised #5 closure criterion.** #5 was narrowed to guarded work and recovery on **one explicitly established active SaaS tab**. Its bounded single-tab acceptance is recorded in [the 2026-10-17 closure assessment](issue-4-5-acceptance.md#5-revised-single-active-tab-closure-assessment--2026-10-17). The selector-capable matrix below remains unverified as an **optional future capability**, not a reason to keep #5 open. [2026-10-13 live checks](issue-4-5-acceptance.md) exercised the selector-free SaaS with safe refusals and explicit-target exports, but do not establish multi-session atomic routing or actual SaaS `sessionId` support.
 
 1. Read the actual schemas of `execute_code` and `export_shape`. Record support/absence of `sessionId` for each independently, and compare each result with the tools the scenario actually invokes; support in one tool does not imply support in the other. `high_level_overview` and `penpot_api_info` are documentation calls and do not select a design.
 2. Create **two disposable Penpot files** A and B and connect both browser tabs. Capture the server-reported IDs when supported; never guess ID-to-file mapping.
@@ -29,3 +29,9 @@ Reload recovery uses the confirmed replacement session ID when supported, verifi
 
 
 Latest guard regressions: selector-free legacy reload can restore the original saved IDs only after explicit intended-singleton confirmation/re-selection; restoration never captures a new selection. Unrouted exports require an immediately preceding guarded target read-back and singleton evidence, including when execute_code retains its own selector. Initial unpinned read discovery consumes a task-scoped allowance before calling Penpot; repeated or interrupted unscoped discovery is rejected. Explicit routes and confirmed recovery reads remain available. These are executable policy tests, not proof of atomic routing in a live ChatGPT host.
+
+## Scope after closing #5
+
+The completed issue covers the real **single-active-tab** contract only: establish and confirm the intended tab, pin file/page/shape IDs, guard writes and explicit-ID exports, fail closed on ambiguity, and restore the original pin after an interrupted connection using user confirmation and fresh read-only inspection. See [#5](https://github.com/makesomethingshit/penpot-for-chatgpt/issues/5) and its [bounded live acceptance](issue-4-5-acceptance.md#5-revised-single-active-tab-closure-assessment--2026-10-17).
+
+Do not infer atomic multi-tab isolation from matching file/page IDs, browser focus, an apparently remaining singleton, policy tests or Codex app-server success. Current selector-free SaaS does not expose a supported tab-routing selector. The table is retained to guide future work **if** a remote host supplies supported session IDs; that would require separately scoped implementation and real host acceptance, rather than reinterpreting #5 as unfinished. ChatGPT desktop model-driven GUI replay was not run.
