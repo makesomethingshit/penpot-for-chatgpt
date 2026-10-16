@@ -39,6 +39,13 @@ try {
     assert.deepEqual(await readFile(join(readback, name, file)), await readFile(join('plugin', file)),
       `Packaged content changed: ${file}`);
   }
+  const guide = spawnSync(process.execPath, ['scripts/penpot-account.mjs', 'connect'], {
+    cwd: join(readback, name), encoding: 'utf8', windowsHide: true
+  });
+  assert.ifError(guide.error);
+  assert.equal(guide.status, 0, guide.stderr);
+  assert.match(guide.stdout, /Remote MCP authentication\/tool discovery: NOT CHECKED/);
+  assert.match(guide.stdout, /Active Penpot design file\/tab: NOT CHECKED/);
   const digest = createHash('sha256').update(await readFile(archive)).digest('hex');
   await writeFile('dist/SHA256SUMS', `${digest}  ${filename}\n`);
   console.log(archive);
