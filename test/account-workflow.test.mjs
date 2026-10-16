@@ -41,6 +41,39 @@ test('connection guide uses existing secure setup, no secrets', async t => {
   assert.match(x.stdout, /In the installed plugin directory run: node scripts\/penpot-account\.mjs status/);
   assert.ok(!x.stdout.includes(secret));
 });
+test('connection guide treats no-instance error as ambiguous (tab or stale key)', async t => {
+  const { home } = await sandbox(t);
+  const x = await invoke(home, 'connect');
+  assert.equal(x.code, 0);
+  assert.match(x.stdout, /read-only execute_code probe/);
+  assert.match(x.stdout, /No Penpot instance connected/);
+  assert.match(x.stdout, /reconnect the intended file/);
+  assert.match(x.stdout, /stale/);
+  assert.ok(!x.stdout.includes(secret));
+});
+test('printed read-only example parses and runs after the routing and documentation prerequisites', async t => {
+  const { home } = await sandbox(t);
+  for (const action of ['connect', 'status']) {
+    const result = await invoke(home, action, '', { PENPOT_MCP_URL: url });
+    assert.equal(result.code, 0);
+    const match = result.stdout.match(/```javascript\r?\n([\s\S]*?)\r?\n```/);
+    assert.ok(match, 'CLI must print a JavaScript example');
+    const prerequisites = result.stdout.slice(0, match.index);
+    assert.match(prerequisites, /official Penpot MCP tools/);
+    assert.match(prerequisites, /exactly one intended tab/);
+    assert.match(prerequisites, /high_level_overview once per session/);
+    assert.match(prerequisites, /penpot_api_info/);
+    const run = new Function('penpot', match[1]);
+    const penpot = Object.freeze({
+      currentFile: Object.freeze({ id: 'file-1', name: 'Design' }),
+      currentPage: Object.freeze({ id: 'page-1', name: 'Board' })
+    });
+    assert.deepEqual(run(penpot), { file: { id: 'file-1', name: 'Design' }, page: { id: 'page-1', name: 'Board' } });
+    for (const missing of [{}, { currentFile: penpot.currentFile }, { currentPage: penpot.currentPage }]) {
+      assert.throws(() => run(missing), /Open the intended Penpot file and connect MCP/);
+    }
+  }
+});
 test('status separates local credential from unverified remote and active tab', async t => {
   const { home, file } = await sandbox(t);
   if (process.platform !== 'win32') {
