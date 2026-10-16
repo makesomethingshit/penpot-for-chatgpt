@@ -14,9 +14,10 @@ function remoteSteps() {
   console.log('Verify the live tab from the desktop host with this read-only execute_code probe:');
   console.log("const file = penpot.currentFile; const page = penpot.currentPage; if (!file || !page) throw new Error('No Penpot file/tab connected.'); return { fileId: file.id, fileName: file.name, pageId: page.id, pageName: page.name };");
   console.log('IDs returned: the tab is connected; compare them with the pinned task IDs before any write/export.');
-  console.log('`No Penpot instance connected`: the design tab is disconnected while the local credential stays VALID; reconnect the intended file via File > MCP Server > Connect instead of re-entering the key.');
+  console.log('`No Penpot instance connected`: first reconnect the intended file via File > MCP Server > Connect and rerun the probe read-only.');
+  console.log('If it persists after reconnecting the intended tab, the saved key may be stale (regenerating the MCP key revokes the old one): update the saved credential via the existing secure setup, then reconnect.');
   console.log('Reload the desktop MCP connection; connect the intended Penpot file via File > MCP Server > Connect.');
-  console.log('Inspect the file/page read-only before any write/export. A disconnected tab does not require a new token.');
+  console.log('Inspect the file/page read-only before any write/export. Local VALID covers URL structure only, not authentication.');
 }
 
 function connect() {

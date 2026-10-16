@@ -41,13 +41,14 @@ test('connection guide uses existing secure setup, no secrets', async t => {
   assert.match(x.stdout, /In the installed plugin directory run: node scripts\/penpot-account\.mjs status/);
   assert.ok(!x.stdout.includes(secret));
 });
-test('connection guide distinguishes a disconnected tab from a credential failure', async t => {
+test('connection guide treats no-instance error as ambiguous (tab or stale key)', async t => {
   const { home } = await sandbox(t);
   const x = await invoke(home, 'connect');
   assert.equal(x.code, 0);
   assert.match(x.stdout, /read-only execute_code probe/);
   assert.match(x.stdout, /No Penpot instance connected/);
-  assert.match(x.stdout, /instead of re-entering the key/);
+  assert.match(x.stdout, /reconnect the intended file/);
+  assert.match(x.stdout, /stale/);
   assert.ok(!x.stdout.includes(secret));
 });
 test('status separates local credential from unverified remote and active tab', async t => {
