@@ -10053,10 +10053,10 @@ function failPendingRequest(id, message, owner) {
 function requestIdOfMessage(message) {
   return message && !Array.isArray(message) && typeof message.method === "string" && Object.hasOwn(message, "id") && message.id !== void 0 ? message.id : void 0;
 }
-function requestIdOfBody(body) {
+function parseRequestBody(body) {
   if (typeof body !== "string") return;
   try {
-    return requestIdOfMessage(JSON.parse(body));
+    return JSON.parse(body);
   } catch {
     return;
   }
@@ -10094,9 +10094,10 @@ function resourceLimit() {
   return new Error("Penpot bridge resource limit exceeded");
 }
 async function boundedFetch(input, init) {
-  const requestId = init.method === "POST" ? requestIdOfBody(init.body) : void 0;
+  const request = init.method === "POST" ? parseRequestBody(init.body) : void 0;
+  const requestId = requestIdOfMessage(request);
   const resuming = init.method === "GET" && new Headers(init.headers).has("last-event-id");
-  const owner = requestId === void 0 ? resuming ? requestContext.getStore() : void 0 : requestContext.getStore();
+  const owner = requestId !== void 0 || resuming ? requestContext.getStore() : void 0;
   if (resuming && owner?.cancelled) return new Response(null, { status: 405 });
   const options = {
     ...init,
@@ -10126,14 +10127,7 @@ async function boundedFetch(input, init) {
   let previousCR = false;
   let eventEnded = false;
   let resumableId = false;
-  let postRequestIds = [];
-  if (sse && init.method === "POST" && typeof init.body === "string") {
-    try {
-      const messages = JSON.parse(init.body);
-      postRequestIds = (Array.isArray(messages) ? messages : [messages]).filter((message) => message && typeof message.method === "string" && Object.hasOwn(message, "id")).map((message) => ({ id: message.id, owner }));
-    } catch {
-    }
-  }
+  const postRequestIds = sse && init.method === "POST" ? (Array.isArray(request) ? request : [request]).map(requestIdOfMessage).filter((id) => id !== void 0) : [];
   const decoder = postRequestIds.length ? new TextDecoder() : void 0;
   const parser = decoder && createParser({
     onEvent: (event) => {
@@ -10183,13 +10177,13 @@ async function boundedFetch(input, init) {
         if (done) {
           controller.close();
           if (!resumableId) setImmediate(() => postRequestIds.forEach(
-            ({ id, owner: owner2 }) => failPendingRequest(id, "Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.", owner2)
+            (id) => failPendingRequest(id, "Penpot response stream ended without a reply. Remote outcome unknown; inspect the intended file before retrying.", owner)
           ));
         } else controller.enqueue(value);
       } catch (error2) {
         controller.error(error2);
         if (!resumableId) setImmediate(() => postRequestIds.forEach(
-          ({ id, owner: owner2 }) => failPendingRequest(id, "Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.", owner2)
+          (id) => failPendingRequest(id, "Penpot response stream failed before a reply. Remote outcome unknown; inspect the intended file before retrying.", owner)
         ));
       }
     },
@@ -10235,6 +10229,8 @@ if (url2) try {
     if (Object.hasOwn(message, "id") && terminal) {
       const owner = requestOwners.get(message.id);
       if (!owner || owner.cancelled) return;
+      const sourceOwner = requestContext.getStore();
+      if (sourceOwner && sourceOwner !== owner) return;
       requestOwners.delete(message.id);
     }
     if (initializeRequestId !== void 0 && message.id === initializeRequestId) {
@@ -10289,17 +10285,8 @@ if (url2) try {
       initializeRequestId = message.id;
     }
     requestContext.run(requestOwner, () => remote.send(message)).catch((error2) => {
-      const currentOwner = requestId === void 0 ? void 0 : requestOwners.get(requestId);
-      if (requestOwner && currentOwner === requestOwner && !requestOwner.cancelled) {
-        requestOwners.delete(requestId);
-      }
-      if (typeof message.method === "string" && Object.hasOwn(message, "id")) {
-        if (!requestOwner || currentOwner !== requestOwner || requestOwner.cancelled || stopping) return;
-        writeOutput(output, serializeMessage({ jsonrpc: "2.0", id: message.id, error: {
-          code: -32e3,
-          message: error2?.name === "TimeoutError" ? "Penpot response headers timed out. Remote outcome unknown; inspect the intended file before retrying." : "Penpot connection failed. Remote outcome unknown; inspect the intended file before retrying."
-        } }));
-      }
+      if (!requestOwner || requestOwner.cancelled) return;
+      failPendingRequest(requestId, error2?.name === "TimeoutError" ? "Penpot response headers timed out. Remote outcome unknown; inspect the intended file before retrying." : "Penpot connection failed. Remote outcome unknown; inspect the intended file before retrying.", requestOwner);
     });
   };
   local.onclose = () => stop();
