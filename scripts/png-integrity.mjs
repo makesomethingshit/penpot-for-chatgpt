@@ -33,7 +33,7 @@ export function inspectPng(image) {
     const length = image.readUInt32BE(offset);
     const end = offset + 12 + length;
     assert.ok(end <= image.length, 'Truncated PNG chunk payload');
-    const type = image.toString('ascii', offset + 4, offset + 8);
+    const type = image.toString('latin1', offset + 4, offset + 8);
     assert.match(type, /^[A-Za-z]{4}$/, 'Invalid PNG chunk type');
     assert.equal(image.readUInt32BE(end - 4), crc32(image, offset + 4, end - 4),
       `PNG chunk CRC mismatch: ${type}`);
@@ -43,6 +43,8 @@ export function inspectPng(image) {
       assert.equal(length, 13, 'Invalid PNG IHDR length');
       width = image.readUInt32BE(offset + 8);
       height = image.readUInt32BE(offset + 12);
+      assert.ok(width >= 48 && width <= 4096 && height >= 48 && height <= 4096,
+        'Invalid PNG icon dimensions');
     } else {
       assert.notEqual(type, 'IHDR', 'PNG has duplicate IHDR');
     }
@@ -67,7 +69,13 @@ export function inspectPng(image) {
   assert.ok(sawIEND, 'Missing PNG IEND');
   assert.ok(idat.length > 0 && idat.some(part => part.length > 0), 'Empty PNG IDAT');
   try {
-    assert.ok(inflateSync(Buffer.concat(idat), { maxOutputLength: 128 * 1024 * 1024 }).length > 0);
+    const compressed = Buffer.concat(idat);
+    // Eight bytes per pixel covers 16-bit RGBA; Adam7 adds at most 2 * height + 7 filter bytes.
+    const { buffer, engine } = inflateSync(compressed, {
+      maxOutputLength: width * height * 8 + 2 * height + 7, info: true
+    });
+    assert.ok(buffer.length > 0);
+    assert.equal(engine.bytesWritten, compressed.length, 'Trailing bytes in PNG IDAT stream');
   } catch (error) {
     throw new Error('Invalid PNG compressed IDAT stream', { cause: error });
   }
