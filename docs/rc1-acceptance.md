@@ -1,6 +1,6 @@
 # Versioned RC desktop acceptance — 2026-10-18
 
-Status: **Versioned Windows Codex engine installation and single-tab edit/read-back/export passed; recovery remains blocked.** MIT and packaged-license checks passed. This certifies only the supported extracted-archive/local-marketplace engine path, not ChatGPT GUI archive import.
+Status: **Versioned Windows Codex engine installation and single-tab edit/read-back/export passed; scoped interruption/recovery acceptance passed.** MIT and packaged-license checks passed. This certifies only the supported extracted-archive/local-marketplace engine path, not ChatGPT GUI archive import.
 
 ## Exact artifact and host
 
@@ -34,7 +34,17 @@ All following design operations used mcpServer/tool/call through the actual desk
 
 ## Recovery and remaining limits
 
-Recovery requires read-only verification of the original file/page/target, confirmation x remains 24 after the failed write, restoration of the entire saved task pin after plugin reload, and only then a fresh guarded continuation/export. Reload/reconnect initially remained connecting; the original test file was closed and reopened, preserving its original IDs. Repeated reads through fresh installed-RC desktop engines still returned No Penpot instance connected. Therefore post-reconnect pin restoration, proof that x remains 24 (no replay), and resumed edit/export are NOT PASSED in this run. Do not substitute the earlier single-tab recovery evidence for this exact-artifact result.
+After the delayed browser connection completed, both the registered remote MCP and the exact installed RC read the original file/page successfully. No key, configuration or package change was needed. This was an observed manual reload/close-reopen/Connect recovery; it does not establish reliable automatic reconnection or identify the internal cause of the delay.
+
+Through fresh actual desktop engine processes using the same installed archive:
+
+1. Read-only recovery inspection resolved the original saved file/page/target IDs and neighbor. The target remained x=24, not the attempted disconnected x=25; root count remained two. This verifies no replay of that failed fixture write.
+2. The reloaded plugin had no stored task pin. Restored the entire original fileId/pageId/targetIds only after verifying the IDs and state; no current-selection substitution or invented session selector was used.
+3. A new same-execution guarded continuation moved x=24 to x=26. A separate read-back asserted the same target ID and x=26, neighbor ID/name/x/y/width/height/fills and root count unchanged.
+4. Immediately after guarded read-back, explicit-original-target-ID export returned one 80x48 PNG, visually verified as the expected blue rectangle.
+5. Local assert-based evidence checks verified original IDs, x=24 before continuation, missing pin after reload, full pin restoration, x=26 afterward, neighbor preservation and PNG dimensions. Raw results and PNG remain outside repository history.
+
+**Recovery acceptance: PASS for this exact artifact and bounded single-tab fixture.** Safe refusal during interruption and verified restoration/resumption are established. This does not prove absence of every possible unknown-outcome or concurrent-tab failure; those transport/policy regressions retain separate automated coverage.
 
 GUI archive import, model-driven ChatGPT desktop behavior, macOS/Linux GUI hosts, atomic multi-tab isolation, automatic reconnect reliability and byte-identical archive rebuilds are not verified. The preservation assertions cover the listed fixture properties, not every possible Penpot document property.
 
