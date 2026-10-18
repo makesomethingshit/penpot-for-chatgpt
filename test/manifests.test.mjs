@@ -104,6 +104,24 @@ test('package check rejects invalid external-schema and host metadata fixtures',
   await rm(licensePath);
   await assert.rejects(check(), error => error.code === 1);
   await writeFile(licensePath, licenseBefore);
+  const sourceLicensePath = join(directory, 'LICENSE');
+  const sourceLicenseBefore = await readFile(sourceLicensePath, 'utf8');
+  try {
+    // Matching copies must still contain the complete approved MIT notice.
+    for (const notice of [
+      'MIT License\n\nCopyright (c) 2026 makesomethingshit\n',
+      sourceLicenseBefore.split('THE SOFTWARE IS PROVIDED')[0],
+      sourceLicenseBefore.replace('free of charge', 'for a payment'),
+      sourceLicenseBefore.replace('WITHOUT WARRANTY', 'WITH NO WARRANTY'),
+    ]) {
+      await writeFile(sourceLicensePath, notice);
+      await writeFile(licensePath, notice);
+      await assert.rejects(check(), error => error.code === 1 && /complete approved MIT notice/.test(error.stderr));
+    }
+  } finally {
+    await writeFile(sourceLicensePath, sourceLicenseBefore);
+    await writeFile(licensePath, licenseBefore);
+  }
   const iconPath = join(directory, 'plugin/assets/icon.png');
   const iconBefore = await readFile(iconPath);
   const invalidIcon = Buffer.alloc(24);

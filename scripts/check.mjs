@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { isReleaseVersion } from './release-version.mjs';
 import { createRequire } from 'node:module';
 // Resolve the locked SDK dependency from its owner, including nested npm layouts.
@@ -10,8 +11,10 @@ const json = async path => JSON.parse(await readFile(path, 'utf8'));
 const pkg = await json('package.json');
 const lock = await json('package-lock.json');
 const sourceLicense = await readFile('LICENSE', 'utf8');
-assert.match(sourceLicense, /^MIT License\n/);
-assert.ok(sourceLicense.includes('Copyright (c) 2026 makesomethingshit'));
+// Pin the full approved notice, including permission and warranty clauses.
+assert.equal(createHash('sha256').update(sourceLicense).digest('hex'),
+  '2aa2211fcab602eb11c8621d448bad58440eb036f389d752b7ea4da8579ccb71',
+  'Source LICENSE must contain the complete approved MIT notice');
 assert.equal(pkg.license, 'MIT');
 assert.equal(lock.packages[''].license, pkg.license);
 const marketplace = await json('.agents/plugins/marketplace.json');
