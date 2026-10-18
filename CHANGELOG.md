@@ -7,6 +7,7 @@ No release has been tagged or published. The release checklist must be completed
 ## 0.1.0-rc.1 (candidate; not tagged)
 
 - Synchronize npm, lockfile, portable plugin, and Codex compatibility version metadata.
+- Apply the approved MIT project license, include its full notice in the standalone archive, and validate metadata/source/package parity.
 - Pin the directly imported `eventsource-parser` dependency rather than relying on a transitive SDK installation.
 - Validate prerelease SemVer, enforce release-version and direct parser lockfile parity, and test the actual package checker against invalid or mismatched metadata.
 - Add guided credential connect/status/disconnect and host-side read-only live-tab verification instructions (#38, #39).

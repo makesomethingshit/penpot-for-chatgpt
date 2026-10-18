@@ -178,4 +178,4 @@ Inspection and audit stay read-only. Edits preserve unrelated boards and compone
 
 Icons use the official symbols from the [Penpot media kit](https://penpot.app/media-kit); Penpot retains its brand rights. This project does not claim endorsement or ownership. Bundled dependency licenses are in [THIRD_PARTY_NOTICES.txt](plugin/server/THIRD_PARTY_NOTICES.txt).
 
-The repository is public and the project's source license is undecided. Public visibility does not grant a redistribution license. See the [changelog](CHANGELOG.md).
+Original project code is licensed under the [MIT License](LICENSE). The standalone package includes the same license as `LICENSE`; Penpot artwork and bundled dependencies retain their respective rights. See the [changelog](CHANGELOG.md).

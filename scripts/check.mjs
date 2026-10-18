@@ -9,6 +9,11 @@ import { resolve, relative, dirname, isAbsolute, sep } from 'node:path';
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
 const pkg = await json('package.json');
 const lock = await json('package-lock.json');
+const sourceLicense = await readFile('LICENSE', 'utf8');
+assert.match(sourceLicense, /^MIT License\n/);
+assert.ok(sourceLicense.includes('Copyright (c) 2026 makesomethingshit'));
+assert.equal(pkg.license, 'MIT');
+assert.equal(lock.packages[''].license, pkg.license);
 const marketplace = await json('.agents/plugins/marketplace.json');
 assert.equal(marketplace.plugins.length, 1);
 assert.equal(marketplace.plugins[0].source.source, 'local');
@@ -29,9 +34,11 @@ for (const [path, schemaName] of [['plugin.json', 'plugin'], ['mcp.json', 'mcp']
   assert.ok(validate(await json(await pluginPath(path))), `${path}: ${ajv.errorsText(validate.errors)}`);
 }
 const legacy = await json(await pluginPath('.codex-plugin/plugin.json'));
-for (const field of ['name', 'version', 'description', 'author', 'homepage', 'repository', 'keywords']) {
+for (const field of ['name', 'version', 'description', 'author', 'homepage', 'repository', 'keywords', 'license']) {
   assert.deepEqual(legacy[field], plugin[field], `Compatibility manifest: ${field}`);
 }
+assert.equal(pkg.license, plugin.license);
+assert.equal(await readFile(await pluginPath('LICENSE'), 'utf8'), sourceLicense, 'Packaged project license must match the source LICENSE');
 assert.equal(pkg.version, plugin.version);
 assert.equal(lock.version, pkg.version);
 assert.equal(lock.packages[''].version, pkg.version);

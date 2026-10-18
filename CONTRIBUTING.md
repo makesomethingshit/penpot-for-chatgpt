@@ -1,6 +1,6 @@
 # Contributing
 
-This repository is public and its project source license is undecided. Access to this repository does not establish a public redistribution license. Penpot artwork and bundled dependencies retain their respective rights.
+Original project code is licensed under the [MIT License](LICENSE). Penpot artwork and bundled dependencies retain their respective rights.
 
 ## Change and verify
 

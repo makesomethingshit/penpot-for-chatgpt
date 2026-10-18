@@ -2,6 +2,7 @@
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "penpot-for-chatgpt",
   "version": "0.1.0-rc.1",
+  "license": "MIT",
   "description": "Desktop Penpot assistant with five skills and a bundled local bridge to the official authenticated Penpot MCP server.",
   "author": {
     "name": "makesomethingshit",

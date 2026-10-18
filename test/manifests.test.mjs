@@ -11,7 +11,7 @@ test('package check rejects invalid external-schema and host metadata fixtures',
   t.after(() => rm(directory, { recursive: true, force: true }));
   await cp('plugin', join(directory, 'plugin'), { recursive: true });
   await mkdir(join(directory, '.agents/plugins'), { recursive: true });
-  for (const path of ['package.json', 'package-lock.json', '.agents/plugins/marketplace.json']) {
+  for (const path of ['package.json', 'package-lock.json', 'LICENSE', '.agents/plugins/marketplace.json']) {
     await cp(path, join(directory, path));
   }
   const check = () => promisify(execFile)(process.execPath, [resolve('scripts/check.mjs')], { cwd: directory, windowsHide: true });
@@ -35,6 +35,8 @@ test('package check rejects invalid external-schema and host metadata fixtures',
     ['plugin/plugin.json', value => { value.extensions['com.openai'].interface.defaultPrompt = ['same', 'same']; }],
     ['plugin/plugin.json', value => { value.name = 'Bad Name'; }],
     ['plugin/plugin.json', value => { value.unsupported = true; }],
+    ...['package.json', 'plugin/plugin.json', 'plugin/.codex-plugin/plugin.json'].map(path => [path, value => { value.license = 'UNLICENSED'; }]),
+    ['package-lock.json', value => { delete value.packages[''].license; }],
     ['package.json', value => { delete value.dependencies['eventsource-parser']; }],
     ['package-lock.json', value => { delete value.packages[''].dependencies['eventsource-parser']; }],
     ['package-lock.json', value => { value.packages[''].dependencies['eventsource-parser'] = '^3.1.1'; }],
@@ -95,6 +97,13 @@ test('package check rejects invalid external-schema and host metadata fixtures',
       await writeFile(join(directory, path), releaseBefore[index]);
     }
   }
+  const licensePath = join(directory, 'plugin/LICENSE');
+  const licenseBefore = await readFile(licensePath, 'utf8');
+  await writeFile(licensePath, 'MIT License\nTruncated notice\n');
+  await assert.rejects(check(), error => error.code === 1 && /must match the source LICENSE/.test(error.stderr));
+  await rm(licensePath);
+  await assert.rejects(check(), error => error.code === 1);
+  await writeFile(licensePath, licenseBefore);
   const iconPath = join(directory, 'plugin/assets/icon.png');
   const iconBefore = await readFile(iconPath);
   const invalidIcon = Buffer.alloc(24);
