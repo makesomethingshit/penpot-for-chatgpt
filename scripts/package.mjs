@@ -6,6 +6,8 @@ import { createHash } from 'node:crypto';
 
 const { name, version } = JSON.parse(await readFile('plugin/plugin.json', 'utf8'));
 const filename = `${name}-${version ?? 'preview'}.tar.gz`;
+// Rebuild before validating or archiving so local packaging cannot ship a stale bridge.
+await import('./build.mjs');
 await import('./check.mjs');
 await mkdir('dist', { recursive: true });
 const staging = await mkdtemp(resolve('dist/staging-'));
