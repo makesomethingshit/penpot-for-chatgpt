@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { isReleaseVersion } from './release-version.mjs';
+import { inspectPng } from './png-integrity.mjs';
 import { createRequire } from 'node:module';
 // Resolve the locked SDK dependency from its owner, including nested npm layouts.
 const { default: Ajv2020 } = createRequire(import.meta.resolve('@modelcontextprotocol/sdk/client/index.js'))('ajv/dist/2020.js');
@@ -81,14 +82,9 @@ for (const field of ['logo', 'logoDark', 'composerIcon', 'composerIconDark']) {
   assert.ok(typeof ui[field] === 'string' && ui[field].startsWith('./'), `Icon path: ${field}`);
   const path = await pluginPath(ui[field]);
   const image = await readFile(path);
-  assert.ok(image.length >= 57, 'PNG icon is truncated');
-  assert.ok(image.subarray(0, 8).equals(Buffer.from('89504e470d0a1a0a', 'hex')), 'Invalid PNG signature');
-  assert.equal(image.readUInt32BE(8), 13, 'Invalid PNG IHDR length');
-  assert.equal(image.subarray(12, 16).toString(), 'IHDR');
-  assert.ok(image.subarray(-12).equals(Buffer.from('0000000049454e44ae426082', 'hex')), 'Missing PNG IEND');
-  assert.equal(image.readUInt32BE(16), image.readUInt32BE(20));
-  assert.ok(image.readUInt32BE(16) >= 48 && image.readUInt32BE(16) <= 4096);
-  assert.ok(image.length <= 5 * 1024 * 1024);
+  const { width, height } = inspectPng(image);
+  assert.equal(width, height, 'Icon PNG must be square');
+  assert.ok(width >= 48 && width <= 4096, 'Icon PNG dimensions are out of range');
 }
 assert.deepEqual((await json(await pluginPath('mcp.json'))).mcpServers, (await json(await pluginPath('.mcp.json'))).mcpServers);
 assert.deepEqual((await json(await pluginPath('mcp.json'))).mcpServers.penpot, {
