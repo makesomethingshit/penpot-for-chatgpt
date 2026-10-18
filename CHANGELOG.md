@@ -2,7 +2,16 @@
 
 ## Unreleased
 
-Development changes are unnumbered. The first release will be `0.1.0` at deployment.
+No release has been tagged or published. The release checklist must be completed first.
+
+## 0.1.0-rc.1 (candidate; not tagged)
+
+- Synchronize npm, lockfile, portable plugin, and Codex compatibility version metadata.
+- Pin the directly imported `eventsource-parser` dependency rather than relying on a transitive SDK installation.
+- Validate prerelease SemVer and add regression tests.
+- Add guided credential connect/status/disconnect and host-side read-only live-tab verification instructions (#38, #39).
+- Align the single-active-tab acceptance record with scoped recovery and documented multi-tab limitations (#40).
+- Add a release checklist covering licensing, real desktop-host acceptance, security, and publication boundaries.
 
 - Five design skills with a bundled stdio-to-HTTP bridge and Windows DPAPI setup.
 - Refuse HTTP redirects for the SDK's GET and reconnect paths as well as POST.

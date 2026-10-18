@@ -4,7 +4,7 @@
 
 Five design skills and a desktop MCP bridge for working with your existing Penpot files. Inspect a screen, implement it in code, create a responsive variant, maintain a design system, or audit a flow.
 
-This is an unnumbered development package. The first release will be `0.1.0` when deployed.
+This repository now prepares the **unpublished `0.1.0-rc.1` release candidate**. No GitHub tag, official plugin publication, or release approval is implied.
 
 The skills inspect the live design first, preserve components and tokens, and verify changes with read-back and exported previews. This is an independent integration, not an official Penpot or OpenAI product.
 
@@ -52,7 +52,7 @@ codex plugin marketplace upgrade penpot-for-chatgpt
 
 For a local checkout, update that checkout before re-adding the plugin. Reload your desktop host's MCP connection. Your connection file lives outside the plugin and does not need to be re-entered unless the Penpot key changed.
 
-Codex may assign its own cache version when a development manifest omits `version`. That internal label is not this project's release number; use the Git commit to identify development builds.
+The package manifests declare `0.1.0-rc.1`. A host-assigned cache label is not proof of official distribution or verified release-host compatibility; verify the source commit and actual installed files.
 
 ### Download a verified package
 
@@ -164,11 +164,13 @@ POST response **headers** have a 180-second deadline; expiration aborts the requ
 
 The setup script and bridge share the same URL validator. On Windows, tests run setup in a temporary user profile, round-trip DPAPI, and verify rejected input preserves the existing configuration. Settings errors distinguish missing, unreadable, damaged and undecryptable credentials without printing their contents.
 
-`npm run check` validates portable manifests against the external Agent Plugins 1.0.0 schemas (offline snapshots), a subset of documented OpenAI interface requirements, five skills, local links, icons and the marketplace entry. `npm run package` writes one standalone plugin directory to `dist/penpot-for-chatgpt-preview.tar.gz` and a `SHA256SUMS` file. It allows only the required files, then reads back the archive and compares every file with the source. It excludes npm dependencies, Git data, tests and the marketplace catalog.
+`npm run check` validates portable manifests against the external Agent Plugins 1.0.0 schemas (offline snapshots), a subset of documented OpenAI interface requirements, five skills, local links, icons and the marketplace entry. `npm run package` writes one standalone plugin directory to `dist/penpot-for-chatgpt-0.1.0-rc.1.tar.gz` and a `SHA256SUMS` file. It allows only the required files, then reads back the archive and compares every file with the source. It excludes npm dependencies, Git data, tests and the marketplace catalog.
+
+See the [release-candidate checklist](docs/release-checklist.md) for licensing, desktop-host verification, Git tag and publication gates. Versioning the repository does not itself create a release.
 
 CI rebuilds and tests on Node.js 22 on Windows and Linux, then stores the verified Linux package as an artifact. See [CONTRIBUTING.md](CONTRIBUTING.md) for source changes and bug-report details.
 
-Real-design checks and evidence limits are recorded in [the regression matrix](docs/real-design-regression.md); external-spec and host-install limits are recorded in [host compatibility](docs/host-compatibility.md). An unversioned development overlay is not proof of Codex release-format compatibility.
+Real-design checks and evidence limits are recorded in [the regression matrix](docs/real-design-regression.md); external-spec and host-install limits are recorded in [host compatibility](docs/host-compatibility.md). A versioned release candidate still needs desktop-host import and live MCP acceptance.
 
 ## Limits and attribution
 

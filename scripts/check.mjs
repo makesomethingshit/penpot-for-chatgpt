@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { isReleaseVersion } from './release-version.mjs';
 import { createRequire } from 'node:module';
 // Resolve the locked SDK dependency from its owner, including nested npm layouts.
 const { default: Ajv2020 } = createRequire(import.meta.resolve('@modelcontextprotocol/sdk/client/index.js'))('ajv/dist/2020.js');
@@ -39,7 +40,9 @@ assert.equal(marketplace.plugins[0].name, plugin.name);
 assert.equal(legacy.skills, './skills');
 assert.equal(legacy.mcpServers, './.mcp.json');
 assert.deepEqual(legacy.interface, plugin.extensions['com.openai'].interface);
-if (plugin.version !== undefined) assert.match(plugin.version, /^\d+\.\d+\.\d+$/);
+assert.ok(isReleaseVersion(plugin.version), 'Plugin release version must be valid SemVer (including prereleases)');
+assert.equal(pkg.dependencies['eventsource-parser'], lock.packages['node_modules/eventsource-parser']?.version,
+  'Directly imported eventsource-parser must be pinned in the lockfile');
 const ui = legacy.interface;
 for (const field of ['brandColor', 'brandColorDark']) {
   if (ui[field] !== undefined) assert.match(ui[field], /^#[0-9A-Fa-f]{6}$/);
@@ -91,5 +94,5 @@ for (const name of skills) {
   }
 }
 console.log(`Portable package checks passed: ${plugin.name} ${plugin.version ?? '(unreleased)'}, ${skills.length} skills.`);
-if (legacy.version === undefined) console.log('Unversioned Codex overlay: release-format compatibility is unverified; see docs/host-compatibility.md.');
+console.log('Versioned Codex overlay: desktop host import and release compatibility still require separate acceptance.');
 process.chdir('..');
