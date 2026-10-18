@@ -73,3 +73,64 @@ test('maximum-size 16-bit RGBA icon fits the bounded inflate limit', () => {
   const image = png(4096, 4096, deflateSync(Buffer.alloc(4096 * (1 + 4096 * 8))));
   assert.deepEqual(inspectPng(image), { width: 4096, height: 4096 });
 });
+function encodedPng({ depth = 8, color = 6, compression = 0, filter = 0, interlace = 0,
+  raster = Buffer.alloc(48 * (1 + 48 * 4)), before = [], after = [] } = {}) {
+  const header = Buffer.alloc(13);
+  header.writeUInt32BE(48); header.writeUInt32BE(48, 4);
+  Buffer.from([depth, color, compression, filter, interlace]).copy(header, 8);
+  return Buffer.concat([Buffer.from('89504e470d0a1a0a', 'hex'), chunk('IHDR', header), ...before,
+    chunk('IDAT', deflateSync(raster)), ...after, chunk('IEND', Buffer.alloc(0))]);
+}
+
+test('raster length and scanline filter bytes must match IHDR', () => {
+  for (const raster of [Buffer.alloc(1), Buffer.alloc(48 * 193 - 1), Buffer.alloc(48 * 193 + 1)]) {
+    assert.throws(() => inspectPng(encodedPng({ raster })), /Invalid PNG compressed IDAT stream/);
+  }
+  const raster = Buffer.alloc(48 * 193); raster[193] = 5;
+  assert.throws(() => inspectPng(encodedPng({ raster })), /Invalid PNG compressed IDAT stream/);
+});
+
+test('IHDR encoding fields and color-depth combinations are validated', () => {
+  for (const options of [{ depth: 4 }, { color: 1 }, { color: 3, depth: 16 },
+    { compression: 1 }, { filter: 1 }, { interlace: 2 }]) {
+    assert.throws(() => inspectPng(encodedPng(options)), /Invalid PNG IHDR/);
+  }
+});
+
+test('PLTE cardinality, placement, color type and size are enforced', () => {
+  const palette = chunk('PLTE', Buffer.alloc(6));
+  const indexed = { color: 3, raster: Buffer.alloc(48 * 49) };
+  for (const options of [indexed, { ...indexed, after: [palette] },
+    { ...indexed, before: [palette, palette] }, { color: 0, before: [palette] },
+    { color: 4, before: [palette] }, { ...indexed, before: [chunk('PLTE', Buffer.alloc(4))] },
+    { ...indexed, before: [chunk('PLTE', Buffer.alloc(0))] },
+    { ...indexed, before: [chunk('PLTE', Buffer.alloc(771))] },
+    { ...indexed, depth: 1, before: [chunk('PLTE', Buffer.alloc(9))] }]) {
+    assert.throws(() => inspectPng(encodedPng(options)), /PNG.*PLTE/);
+  }
+  assert.deepEqual(inspectPng(encodedPng({ ...indexed, before: [palette] })), { width: 48, height: 48 });
+});
+
+test('reserved lowercase type byte and unknown critical chunks fail; ancillary chunks pass', () => {
+  for (const type of ['abcD', 'ABCD']) {
+    assert.throws(() => inspectPng(encodedPng({ before: [chunk(type, Buffer.alloc(0))] })), /PNG chunk type/);
+  }
+  assert.deepEqual(inspectPng(encodedPng({ before: [chunk('abCD', Buffer.alloc(0))] })), { width: 48, height: 48 });
+});
+
+test('all supported color depths and Adam7 passes have exact scanline layouts', () => {
+  for (const [color, depths, channels] of [[0, [1, 2, 4, 8, 16], 1], [2, [8, 16], 3],
+    [3, [1, 2, 4, 8], 1], [4, [8, 16], 2], [6, [8, 16], 4]]) {
+    for (const depth of depths) {
+      for (const interlace of [0, 1]) {
+        const passes = interlace ? [[0,0,8,8],[4,0,8,8],[0,4,4,8],[2,0,4,4],[0,2,2,4],[1,0,2,2],[0,1,1,2]] : [[0,0,1,1]];
+        const bytes = passes.reduce((n, [x,y,dx,dy]) => n + Math.ceil((48-y)/dy) *
+          (1 + Math.ceil(Math.ceil((48-x)/dx) * depth * channels / 8)), 0);
+        const options = { color, depth, interlace, raster: Buffer.alloc(bytes),
+          before: color === 3 ? [chunk('PLTE', Buffer.alloc(6))] : [] };
+        assert.deepEqual(inspectPng(encodedPng(options)), { width: 48, height: 48 });
+        assert.throws(() => inspectPng(encodedPng({ ...options, raster: Buffer.alloc(bytes - 1) })), /Invalid PNG compressed IDAT stream/);
+      }
+    }
+  }
+});
