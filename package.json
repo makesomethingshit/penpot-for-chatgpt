@@ -1,5 +1,7 @@
 {
   "name": "penpot-for-chatgpt",
+  "version": "0.1.0-rc.1",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "description": "Penpot design skills and a desktop bridge to the official MCP server.",
@@ -15,7 +17,8 @@
     "account": "node plugin/scripts/penpot-account.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1"
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "eventsource-parser": "3.1.1"
   },
   "devDependencies": {
     "esbuild": "0.28.2"

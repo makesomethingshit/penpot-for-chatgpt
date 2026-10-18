@@ -1,6 +1,6 @@
 # Penpot for ChatGPT
 
-Unreleased development package. The first release will be numbered `0.1.0` at deployment.
+Unpublished release candidate `0.1.0-rc.1`. This is not an official Penpot or OpenAI release; check the source repository for publication status and project licensing.
 
 Five Penpot design skills with a desktop bridge to the official SaaS MCP server. Requires Node.js 22+ on your desktop host's PATH and Agent Plugin installation support. Installation does not authenticate your Penpot account. This is an independent integration, not an official Penpot or OpenAI product.
 
@@ -52,6 +52,6 @@ After local success, verify plugin/skill discovery, bridge startup and official 
 - Documentation succeeds but design calls fail: wake the tab and connect MCP in the intended file.
 - Resource limit exceeded: JSON/error bodies, SSE events, individual network chunks and unread output are capped at 64 MiB. Reduce the export or results, then reload the host connection. Persistent SSE has no lifetime byte limit.
 
-See the [source repository](https://github.com/makesomethingshit/penpot-for-chatgpt) for installation updates and development instructions. The repository is public; the project's source license is undecided.
+See the [source repository](https://github.com/makesomethingshit/penpot-for-chatgpt) for installation updates and development instructions. Original project code is licensed under the MIT License included in `LICENSE`.
 
 Penpot owns the icon artwork from its [media kit](https://penpot.app/media-kit). It identifies the connected service and does not imply endorsement. Bundled software licenses are in `server/THIRD_PARTY_NOTICES.txt`.

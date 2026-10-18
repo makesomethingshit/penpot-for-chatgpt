@@ -1,6 +1,6 @@
 # Host compatibility evidence
 
-Latest supported-host acceptance and fixes: [2026-10-13 issue #4/#5 verification](issue-4-5-acceptance.md). The older evidence below is retained as history; the latest check covers automatic startup through a fresh actual desktop-engine process, while GUI archive import and other host versions remain unverified.
+Latest versioned candidate acceptance: [0.1.0-rc.1 Windows desktop evidence](rc1-acceptance.md). Earlier supported-host acceptance: [2026-10-13 issue #4/#5 verification](issue-4-5-acceptance.md). The older evidence below is retained as history; the latest check covers automatic startup through a fresh actual desktop-engine process, while GUI archive import and other host versions remain unverified.
 
 Checked 2026-10-11. Target formats: Agent Plugins 1.0.0 portable manifests and the existing Codex compatibility overlay. No release/version change is included.
 
@@ -17,9 +17,11 @@ A subset of OpenAI-specific interface requirements follows https://developers.op
 
 ## Limits that remain visible
 
-OpenAI's documented Codex release format requires a semantic version; the existing development overlay omits it by project policy. Portable schema validation permits omission. Passing development checks is therefore not proof of Codex release-format validation. Assigning the first version is release work and was not silently done here.
+The current source candidate declares `0.1.0-rc.1` in both plugin manifests and npm/lock metadata. `npm run check` enforces matching versions and strict SemVer, including prereleases. The exact versioned archive passed extracted-archive/local-marketplace installation, automatic MCP startup and live single-tab design/recovery acceptance through the Windows Codex desktop engine, as recorded in [RC1 acceptance](rc1-acceptance.md) and the [release checklist](release-checklist.md). Direct GUI archive import, model-driven ChatGPT desktop behavior and other OS/GUI hosts remain unverified. The installation evidence below predates this candidate.
 
-After explicit user authorization, Codex CLI `0.162.0-alpha.17.2` registered this local marketplace and installed `penpot-for-chatgpt@penpot-for-chatgpt`. Host-assigned cache version was `1.0.0`; source manifests remain unversioned, so this is not a project release.
+At the initial check, OpenAI's documented Codex release format required a semantic version; the development overlay omitted it by project policy. Portable schema validation permitted omission. Passing those development checks did not prove Codex release-format validation.
+
+After explicit user authorization, Codex CLI `0.162.0-alpha.17.2` registered this local marketplace and installed `penpot-for-chatgpt@penpot-for-chatgpt`. Host-assigned cache version was `1.0.0`; source manifests were unversioned at that time, so that cache label did not identify a project release.
 
 The actual installed desktop executable's app-server returned all five enabled skills through `skills/list` with zero discovery errors, and `plugin/read` returned the `penpot` MCP entry. No model turn or external model was invoked. Installed `bridge.mjs`, `penpot-use/SKILL.md` and `penpot-doctor.mjs` hashes matched this checkout. The installed diagnostic passed with the existing credentials.
 

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
+import { isReleaseVersion } from './release-version.mjs';
 import { createRequire } from 'node:module';
 // Resolve the locked SDK dependency from its owner, including nested npm layouts.
 const { default: Ajv2020 } = createRequire(import.meta.resolve('@modelcontextprotocol/sdk/client/index.js'))('ajv/dist/2020.js');
@@ -8,6 +10,13 @@ import { resolve, relative, dirname, isAbsolute, sep } from 'node:path';
 const json = async path => JSON.parse(await readFile(path, 'utf8'));
 const pkg = await json('package.json');
 const lock = await json('package-lock.json');
+const sourceLicense = await readFile('LICENSE', 'utf8');
+// Pin the full approved notice, including permission and warranty clauses.
+assert.equal(createHash('sha256').update(sourceLicense).digest('hex'),
+  '2aa2211fcab602eb11c8621d448bad58440eb036f389d752b7ea4da8579ccb71',
+  'Source LICENSE must contain the complete approved MIT notice');
+assert.equal(pkg.license, 'MIT');
+assert.equal(lock.packages[''].license, pkg.license);
 const marketplace = await json('.agents/plugins/marketplace.json');
 assert.equal(marketplace.plugins.length, 1);
 assert.equal(marketplace.plugins[0].source.source, 'local');
@@ -28,9 +37,11 @@ for (const [path, schemaName] of [['plugin.json', 'plugin'], ['mcp.json', 'mcp']
   assert.ok(validate(await json(await pluginPath(path))), `${path}: ${ajv.errorsText(validate.errors)}`);
 }
 const legacy = await json(await pluginPath('.codex-plugin/plugin.json'));
-for (const field of ['name', 'version', 'description', 'author', 'homepage', 'repository', 'keywords']) {
+for (const field of ['name', 'version', 'description', 'author', 'homepage', 'repository', 'keywords', 'license']) {
   assert.deepEqual(legacy[field], plugin[field], `Compatibility manifest: ${field}`);
 }
+assert.equal(pkg.license, plugin.license);
+assert.equal(await readFile(await pluginPath('LICENSE'), 'utf8'), sourceLicense, 'Packaged project license must match the source LICENSE');
 assert.equal(pkg.version, plugin.version);
 assert.equal(lock.version, pkg.version);
 assert.equal(lock.packages[''].version, pkg.version);
@@ -39,7 +50,13 @@ assert.equal(marketplace.plugins[0].name, plugin.name);
 assert.equal(legacy.skills, './skills');
 assert.equal(legacy.mcpServers, './.mcp.json');
 assert.deepEqual(legacy.interface, plugin.extensions['com.openai'].interface);
-if (plugin.version !== undefined) assert.match(plugin.version, /^\d+\.\d+\.\d+$/);
+assert.ok(isReleaseVersion(plugin.version), 'Plugin release version must be valid SemVer (including prereleases)');
+assert.ok(isReleaseVersion(pkg.dependencies['eventsource-parser']),
+  'Direct eventsource-parser dependency must be pinned to an exact version');
+assert.equal(lock.packages[''].dependencies?.['eventsource-parser'], pkg.dependencies['eventsource-parser'],
+  'Lockfile root must declare the direct eventsource-parser dependency');
+assert.equal(pkg.dependencies['eventsource-parser'], lock.packages['node_modules/eventsource-parser']?.version,
+  'Directly imported eventsource-parser must be pinned in the lockfile');
 const ui = legacy.interface;
 for (const field of ['brandColor', 'brandColorDark']) {
   if (ui[field] !== undefined) assert.match(ui[field], /^#[0-9A-Fa-f]{6}$/);
@@ -91,5 +108,5 @@ for (const name of skills) {
   }
 }
 console.log(`Portable package checks passed: ${plugin.name} ${plugin.version ?? '(unreleased)'}, ${skills.length} skills.`);
-if (legacy.version === undefined) console.log('Unversioned Codex overlay: release-format compatibility is unverified; see docs/host-compatibility.md.');
+console.log('Versioned Codex overlay: desktop host import and release compatibility still require separate acceptance.');
 process.chdir('..');
