@@ -1,10 +1,10 @@
 # Versioned RC desktop acceptance — 2026-10-18
 
-Status: **PARTIAL; release blocker remains open.** MIT selection and packaged-license verification passed. Versioned package installation/startup passed in the actual Windows Codex desktop engine; live design acceptance did not pass.
+Status: **Versioned Windows Codex engine installation and single-tab edit/read-back/export passed; recovery remains blocked.** MIT and packaged-license checks passed. This certifies only the supported extracted-archive/local-marketplace engine path, not ChatGPT GUI archive import.
 
 ## Exact artifact and host
 
-- Candidate: 0.1.0-rc.1, based on Git commit 7ebf16b3510fb111a97477e40a8694c35c429374 plus the MIT/license-verification changes in this PR. The final PR commit contains the tested plugin bytes; the archive checksum identifies this specific build.
+- Candidate: 0.1.0-rc.1, packaged plugin bytes at Git commit 8c56b187b948eb33acdc70f859c0551c18bfe021. Subsequent acceptance-document updates do not alter those bytes; the archive checksum identifies this specific build.
 - Artifact: dist/penpot-for-chatgpt-0.1.0-rc.1.tar.gz
 - SHA-256: 30cb414f1617c8a9e621dec702c07c5d81bfcc9e8b8aadd445b12b0205de5368
 - OS/runtime: Windows x64, Node.js 24.18.0.
@@ -20,13 +20,23 @@ Status: **PARTIAL; release blocker remains open.** MIT selection and packaged-li
 - mcpServerStatus/list reported connected and discovered high_level_overview, penpot_api_info, execute_code and export_shape. The installed bridge successfully returned the overview.
 - No model turn was started. Test scripts and raw host results remain local, outside repository history; no credentials, private designs or screenshots are committed.
 
-## Blocked / not established
+## Live single-tab workflow
 
-The installed RC's read-only execute_code returned No Penpot instance connected for user token. The registered remote Penpot MCP independently returned the same error. Tool discovery and connected transport therefore do not establish an active design or a successful remote design operation.
+The initial no-instance failures were followed by a browser log transition from connecting to Connected to MCP server and a Disconnect menu. Without changing the key, saved configuration or package, both the registered remote MCP and installed RC read the same disposable file/page successfully. The earlier absence of a visible plugin frame did not prove a startup failure: the integrated plugin runs in the background. The observed failure boundary was pending browser connection; the internal reason for the delay was not established.
 
-A new empty Penpot test file was opened. Connect here, browser reload and a second Connect here were attempted; both the registered remote MCP and a fresh installed-RC desktop engine still returned the same error. No credential rotation was performed. Connection recovery must succeed and be confirmed by file/page read-back before design mutation or export. No design mutation was attempted through MCP.
+All following design operations used mcpServer/tool/call through the actual desktop engine with the installed archive, not a separately launched SDK bridge:
 
-Remaining release acceptance: successful pinned file/page inspection, guarded edit and same-shape-ID read-back, explicit-ID PNG export with neighbor preservation, and interruption/reconnect recovery on this exact package. GUI archive import, model-driven ChatGPT desktop behavior, macOS/Linux GUI hosts and byte-identical archive rebuilds are not verified.
+- Created two rectangles only in the newly created empty test file, with fixed file/page guards: an 80x48 blue target and a 32x32 yellow neighbor.
+- Pinned file/page/target IDs. In a same-execution guard, moved target x=10 to x=24 and compared the neighbor before/after.
+- A separate installed-host read resolved the same target ID and asserted x=24; neighbor ID/name/x/y/width/height/fills and root child count stayed unchanged (two children).
+- Guarded read-back immediately preceded explicit-target-ID PNG export. The installed RC returned one PNG; its 80x48 blue rectangle was visually inspected.
+- Intentional browser Disconnect made both an attempted guarded x=24 to x=25 edit and an explicit-ID export return No Penpot instance connected, with no image. The requests were not replayed by the harness.
+
+## Recovery and remaining limits
+
+Recovery requires read-only verification of the original file/page/target, confirmation x remains 24 after the failed write, restoration of the entire saved task pin after plugin reload, and only then a fresh guarded continuation/export. Reload/reconnect initially remained connecting; the original test file was closed and reopened, preserving its original IDs. Repeated reads through fresh installed-RC desktop engines still returned No Penpot instance connected. Therefore post-reconnect pin restoration, proof that x remains 24 (no replay), and resumed edit/export are NOT PASSED in this run. Do not substitute the earlier single-tab recovery evidence for this exact-artifact result.
+
+GUI archive import, model-driven ChatGPT desktop behavior, macOS/Linux GUI hosts, atomic multi-tab isolation, automatic reconnect reliability and byte-identical archive rebuilds are not verified. The preservation assertions cover the listed fixture properties, not every possible Penpot document property.
 
 ## Local validation
 
@@ -34,4 +44,4 @@ Remaining release acceptance: successful pinned file/page inspection, guarded ed
 - Focused manifest/SemVer regressions: 3 passed.
 - npm run check; npm run package (25 files); npm run build and generated bridge parity: passed.
 - npm audit --audit-level=high: 0 vulnerabilities.
-- Final-SHA Windows/Ubuntu Node 22 CI must be checked after push; local Node 24 results do not substitute for it.
+- Plugin-byte commit 8c56b187b948eb33acdc70f859c0551c18bfe021 passed Windows/Ubuntu Node 22 push and PR CI. Final acceptance-document commit CI must also pass; its result is recorded in the PR body. Local Node 24 results do not substitute for it.
