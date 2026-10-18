@@ -41,6 +41,10 @@ assert.equal(legacy.skills, './skills');
 assert.equal(legacy.mcpServers, './.mcp.json');
 assert.deepEqual(legacy.interface, plugin.extensions['com.openai'].interface);
 assert.ok(isReleaseVersion(plugin.version), 'Plugin release version must be valid SemVer (including prereleases)');
+assert.ok(isReleaseVersion(pkg.dependencies['eventsource-parser']),
+  'Direct eventsource-parser dependency must be pinned to an exact version');
+assert.equal(lock.packages[''].dependencies?.['eventsource-parser'], pkg.dependencies['eventsource-parser'],
+  'Lockfile root must declare the direct eventsource-parser dependency');
 assert.equal(pkg.dependencies['eventsource-parser'], lock.packages['node_modules/eventsource-parser']?.version,
   'Directly imported eventsource-parser must be pinned in the lockfile');
 const ui = legacy.interface;

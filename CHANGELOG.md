@@ -8,7 +8,7 @@ No release has been tagged or published. The release checklist must be completed
 
 - Synchronize npm, lockfile, portable plugin, and Codex compatibility version metadata.
 - Pin the directly imported `eventsource-parser` dependency rather than relying on a transitive SDK installation.
-- Validate prerelease SemVer and add regression tests.
+- Validate prerelease SemVer, enforce release-version and direct parser lockfile parity, and test the actual package checker against invalid or mismatched metadata.
 - Add guided credential connect/status/disconnect and host-side read-only live-tab verification instructions (#38, #39).
 - Align the single-active-tab acceptance record with scoped recovery and documented multi-tab limitations (#40).
 - Add a release checklist covering licensing, real desktop-host acceptance, security, and publication boundaries.

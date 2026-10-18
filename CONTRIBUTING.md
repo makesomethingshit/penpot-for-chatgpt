@@ -16,7 +16,7 @@ npm run package
 
 Edit `plugin/server/bridge-source.mjs` and rebuild instead of editing the bundled `bridge.mjs`. Commit the regenerated bundle, build metadata and third-party notices alongside the source. Tests use synthetic credentials and do not require a Penpot account.
 
-Keep portable `plugin/plugin.json` and `.codex-plugin/plugin.json` metadata synchronized. Leave development changes unnumbered under `Unreleased`. At the first deployment, set `0.1.0` in both manifests and `package.json`/`package-lock.json`, update the changelog, and rebuild the package. Assign later versions only when preparing an actual release.
+Keep portable `plugin/plugin.json` and `.codex-plugin/plugin.json` metadata synchronized. The current source candidate is `0.1.0-rc.1`; leave subsequent development notes under `Unreleased`. When preparing a release, synchronize both manifests, `package.json`, and both the root and `packages['']` versions in `package-lock.json`, update the changelog, and rebuild the package. Complete the [release checklist](docs/release-checklist.md) before Ready or publication; version metadata alone does not establish host acceptance.
 
 Keep skill instructions scoped to their workflow; specialists share `penpot-use`. Preserve file/page guards, component/token bindings and read-back verification. Do not add hooks, another MCP server or another workflow dependency to solve a documentation gap.
 

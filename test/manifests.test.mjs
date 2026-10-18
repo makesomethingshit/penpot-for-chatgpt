@@ -35,6 +35,9 @@ test('package check rejects invalid external-schema and host metadata fixtures',
     ['plugin/plugin.json', value => { value.extensions['com.openai'].interface.defaultPrompt = ['same', 'same']; }],
     ['plugin/plugin.json', value => { value.name = 'Bad Name'; }],
     ['plugin/plugin.json', value => { value.unsupported = true; }],
+    ['package.json', value => { delete value.dependencies['eventsource-parser']; }],
+    ['package-lock.json', value => { delete value.packages[''].dependencies['eventsource-parser']; }],
+    ['package-lock.json', value => { value.packages[''].dependencies['eventsource-parser'] = '^3.1.1'; }],
     ['.agents/plugins/marketplace.json', value => { value.plugins[0].source.source = 'remote'; }],
     ['plugin/mcp.json', value => { delete value.mcpServers.penpot.command; }],
     ['plugin/mcp.json', value => { value.mcpServers.penpot.cwd = '../outside'; }],
@@ -59,6 +62,38 @@ test('package check rejects invalid external-schema and host metadata fixtures',
     await assert.rejects(check(), error => error.code === 1);
     await writeFile(fullPath, before);
     if (path !== 'plugin/.codex-plugin/plugin.json') await writeFile(overlayPath, overlayBefore);
+  }
+  const releasePaths = ['package.json', 'package-lock.json', 'plugin/plugin.json', 'plugin/.codex-plugin/plugin.json'];
+  const releaseBefore = await Promise.all(releasePaths.map(path => readFile(join(directory, path), 'utf8')));
+  const releaseFields = [[0, 'version'], [1, 'version'], [1, 'packages', '', 'version'], [2, 'version'], [3, 'version']];
+  async function releaseFixture(fields, version) {
+    const values = releaseBefore.map(text => JSON.parse(text));
+    for (const [index, ...keys] of fields) {
+      const owner = keys.slice(0, -1).reduce((value, key) => value[key], values[index]);
+      owner[keys.at(-1)] = version;
+    }
+    for (const [index, path] of releasePaths.entries()) {
+      await writeFile(join(directory, path), JSON.stringify(values[index]));
+    }
+  }
+  try {
+    for (const version of ['1.2.3', '1.2.3-rc.2+build.01']) {
+      await releaseFixture(releaseFields, version);
+      await check();
+    }
+    // Synchronize every copy so invalid versions reach SemVer validation.
+    for (const version of ['1.2.3-rc.01', '1.2.3+build..1', '1.2.3\n']) {
+      await releaseFixture(releaseFields, version);
+      await assert.rejects(check(), error => error.code === 1 && /must be valid SemVer/.test(error.stderr));
+    }
+    for (const field of releaseFields) {
+      await releaseFixture([field], '9.9.9');
+      await assert.rejects(check(), error => error.code === 1);
+    }
+  } finally {
+    for (const [index, path] of releasePaths.entries()) {
+      await writeFile(join(directory, path), releaseBefore[index]);
+    }
   }
   const iconPath = join(directory, 'plugin/assets/icon.png');
   const iconBefore = await readFile(iconPath);
