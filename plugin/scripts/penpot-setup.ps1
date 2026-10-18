@@ -5,6 +5,9 @@ try {
     if ($LASTEXITCODE -ne 0 -or [int]($nodeVersion.TrimStart('v').Split('.')[0]) -lt 22) {
         throw 'Install Node.js 22 or later before configuring this plugin.'
     }
+    if ($env:PENPOT_MCP_URL) {
+        Write-Host 'Warning: PENPOT_MCP_URL is set and takes precedence over the file saved here. Unset it and restart the host to use the new credential.'
+    }
     Import-Module (Join-Path $PSHOME 'Modules\Microsoft.PowerShell.Security') -ErrorAction Stop
     Write-Host 'In Penpot: Your account > Integrations > MCP Server > Copy server URL.'
     $secret = Read-Host 'Paste the full URL (input is hidden)' -AsSecureString

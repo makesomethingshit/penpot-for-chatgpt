@@ -101,6 +101,8 @@ The setup validates the official endpoint and atomically saves the URL in `~/.pe
 
 Alternatively, hosts that explicitly forward environment variables can still use `PENPOT_MCP_URL`. For Codex launched from Bash, enter it without placing it in shell history:
 
+If `PENPOT_MCP_URL` is set, it takes precedence over the saved connection file. Unset it and restart the host after rotating or removing the saved credential.
+
 ```bash
 read -r -s -p 'Penpot MCP URL (hidden): ' PENPOT_MCP_URL
 printf '\n'

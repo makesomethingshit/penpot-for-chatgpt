@@ -34,6 +34,9 @@ function connect() {
   console.log('Connect Penpot using the official MCP URL; this is not an OAuth sign-in.');
   console.log('Open https://design.penpot.app/ > Your account > Integrations > MCP Server.');
   console.log('Copy the URL privately; never pass it as a command-line argument or paste it into chat.');
+  if (process.env.PENPOT_MCP_URL !== undefined) {
+    console.log('PENPOT_MCP_URL is set and will take precedence over a saved connection file. Unset it and restart the host before relying on a new saved credential.');
+  }
   if (process.platform === 'win32') {
     console.log('In the installed plugin directory run: powershell.exe -NoProfile -File ./scripts/penpot-setup.ps1');
     console.log('The existing setup uses hidden input and Windows DPAPI.');
@@ -93,6 +96,9 @@ async function disconnect() {
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
     console.log('No saved local connection to remove. The remote Penpot token was not revoked.');
+    if (process.env.PENPOT_MCP_URL !== undefined) {
+      console.log('Environment override still exists: unset PENPOT_MCP_URL separately.');
+    }
     return;
   }
   console.log('Only the saved credential file for this OS user will be deleted.');
