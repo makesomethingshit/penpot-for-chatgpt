@@ -13,7 +13,7 @@
 - [x] **Windows and Ubuntu CI.** Plugin-byte commit 8c56b18 and acceptance-document commit 6f0dbf9 passed both Node 22 matrices: install, audit, build/generated parity, tests, checker and package. Every subsequent final head must pass the same checks before completion; final SHA and run links are recorded in the PR body.
 - [x] **Archive integrity.** Tested SHA-256, 25-file allowlist/extraction read-back, installed file parity and matching version/license metadata are recorded in [the acceptance evidence](rc1-acceptance.md). Re-run on packaged-byte changes.
 - [ ] **Actual ChatGPT host compatibility gate (#43).** Follow the [host acceptance protocol](chatgpt-host-acceptance.md). Record whether a supported ChatGPT GUI installation/invocation path exists and, if supported, test the exact candidate bytes end-to-end. Existing Windows Codex engine evidence must not be presented as ChatGPT GUI or model-driven acceptance. An UNSUPPORTED or NOT TESTED result blocks a ChatGPT compatibility claim.
-- [ ] **Publication approval.** Review attribution/brand rights, CHANGELOG/README, #36's outstanding real-host account UX acceptance, package contents and distribution venue. Create a Git tag/GitHub prerelease only after these gates pass.
+- [ ] **Publication approval.** Review attribution/brand rights, CHANGELOG/README, [#36's outstanding real-host account UX acceptance](account-onboarding-acceptance.md), package contents and distribution venue. Create a Git tag/GitHub prerelease only after these gates pass.
 
 ## Not certified by versioning
 
