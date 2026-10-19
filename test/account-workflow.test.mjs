@@ -51,6 +51,25 @@ test('connection guide treats no-instance error as ambiguous (tab or stale key)'
   assert.match(x.stdout, /stale/);
   assert.ok(!x.stdout.includes(secret));
 });
+test('connection guide warns when an environment override takes precedence', async t => {
+  const { home } = await sandbox(t);
+  const x = await invoke(home, 'connect', '', { PENPOT_MCP_URL: url });
+  assert.equal(x.code, 0);
+  assert.match(x.stdout, /PENPOT_MCP_URL is set and will take precedence/);
+  assert.ok(!x.stdout.includes(secret));
+});
+test('empty environment override remains higher priority than saved credentials', async t => {
+  const { home } = await sandbox(t);
+  const guide = await invoke(home, 'connect', '', { PENPOT_MCP_URL: '' });
+  assert.equal(guide.code, 0);
+  assert.match(guide.stdout, /PENPOT_MCP_URL is set and will take precedence/);
+  const status = await invoke(home, 'status', '', { PENPOT_MCP_URL: '' });
+  assert.equal(status.code, 1);
+  assert.match(status.stdout, /Invalid Penpot MCP URL/);
+  const removed = await invoke(home, 'disconnect', '', { PENPOT_MCP_URL: '' });
+  assert.equal(removed.code, 0);
+  assert.match(removed.stdout, /Environment override still exists/);
+});
 test('printed read-only example parses and runs after the routing and documentation prerequisites', async t => {
   const { home } = await sandbox(t);
   for (const action of ['connect', 'status']) {
@@ -161,6 +180,14 @@ test('explicit environment override remains after local removal and is not false
   assert.equal(x.code, 0);
   assert.match(x.stdout, /Environment override still exists/);
   await assert.rejects(readFile(file), { code: 'ENOENT' });
+  assert.ok(!x.stdout.includes(secret));
+});
+test('disconnect without a saved file still warns about an environment override', async t => {
+  const { home } = await sandbox(t);
+  const x = await invoke(home, 'disconnect', 'DISCONNECT\n', { PENPOT_MCP_URL: url });
+  assert.equal(x.code, 0);
+  assert.match(x.stdout, /No saved local connection/);
+  assert.match(x.stdout, /Environment override still exists/);
   assert.ok(!x.stdout.includes(secret));
 });
 

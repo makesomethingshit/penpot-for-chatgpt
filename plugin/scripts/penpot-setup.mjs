@@ -8,6 +8,9 @@ import { validateConnectionURL } from '../server/connection.mjs';
 let temporary;
 try {
   if (process.platform === 'win32') throw new Error('Use the DPAPI setup script on Windows.');
+  if (process.env.PENPOT_MCP_URL !== undefined) {
+    console.warn('Warning: PENPOT_MCP_URL is set and takes precedence over the file saved here. Unset it and restart the host to use the new credential.');
+  }
   const parts = [];
   let bytes = 0;
   for await (const part of process.stdin) {
