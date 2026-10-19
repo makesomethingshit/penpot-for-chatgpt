@@ -58,6 +58,18 @@ test('connection guide warns when an environment override takes precedence', asy
   assert.match(x.stdout, /PENPOT_MCP_URL is set and will take precedence/);
   assert.ok(!x.stdout.includes(secret));
 });
+test('empty environment override remains higher priority than saved credentials', async t => {
+  const { home } = await sandbox(t);
+  const guide = await invoke(home, 'connect', '', { PENPOT_MCP_URL: '' });
+  assert.equal(guide.code, 0);
+  assert.match(guide.stdout, /PENPOT_MCP_URL is set and will take precedence/);
+  const status = await invoke(home, 'status', '', { PENPOT_MCP_URL: '' });
+  assert.equal(status.code, 1);
+  assert.match(status.stdout, /Invalid Penpot MCP URL/);
+  const removed = await invoke(home, 'disconnect', '', { PENPOT_MCP_URL: '' });
+  assert.equal(removed.code, 0);
+  assert.match(removed.stdout, /Environment override still exists/);
+});
 test('printed read-only example parses and runs after the routing and documentation prerequisites', async t => {
   const { home } = await sandbox(t);
   for (const action of ['connect', 'status']) {
