@@ -18,7 +18,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
-    "eventsource-parser": "3.1.1"
+    "eventsource-parser": "4.1.2"
   },
   "devDependencies": {
     "esbuild": "0.28.2"
