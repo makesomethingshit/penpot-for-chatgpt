@@ -17,7 +17,7 @@
     "account": "node plugin/scripts/penpot-account.mjs"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.32.1",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "eventsource-parser": "3.1.1"
   },
   "devDependencies": {
